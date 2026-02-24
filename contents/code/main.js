@@ -65,6 +65,13 @@ function copyGeometry(geometry) {
     };
 }
 
+function geometriesEqual(g1, g2) {
+    return g1.x === g2.x &&
+           g1.y === g2.y &&
+           g1.width === g2.width &&
+           g1.height === g2.height;
+}
+
 function geometriesNearlyEqual(g1, g2) {
     var threshold = 10;
     return Math.abs(g1.x - g2.x) <= threshold &&
@@ -490,7 +497,7 @@ function applyGaps(client) {
     applyGapsWindows(client, clientGeometries);
 
     for (const c of workspace.windowList()) {
-        if (c.internalId in clientGeometries && !geometriesNearlyEqual(c.frameGeometry, clientGeometries[c.internalId])) {
+        if (c.internalId in clientGeometries && !geometriesEqual(c.frameGeometry, clientGeometries[c.internalId])) {
             debug("set geometry", caption(c), geometry(clientGeometries[c.internalId]));
             c.frameGeometry = clientGeometries[c.internalId];
         }
@@ -589,10 +596,10 @@ function applyGapsArea(client, clientGeometries) {
     }
     // apply geo gapped on inner anchors if client is anchored on every side,
     // otherwise geo gapped on outer edges
-    if (Object.keys(grid).every((edge) => anchored[edge]) && !geometriesNearlyEqual(clientGeometry, gridded)) {
+    if (Object.keys(grid).every((edge) => anchored[edge]) && !geometriesEqual(clientGeometry, gridded)) {
         debug("set grid geometry", geometry(gridded));
         clientGeometries[client.internalId] = gridded;
-    } else if (!geometriesNearlyEqual(clientGeometry, edged)) {
+    } else if (!geometriesEqual(clientGeometry, edged)) {
         debug("set edge geometry", geometry(edged));
         clientGeometries[client.internalId] = edged;
     }
@@ -807,7 +814,7 @@ function getGrid(client) {
 
 // a client is maximized iff its geometry is equal to the maximize area
 function maximized(client) {
-    return geometriesNearlyEqual(client.frameGeometry, workspace.clientArea(KWin.MaximizeArea, client));
+    return geometriesEqual(client.frameGeometry, workspace.clientArea(KWin.MaximizeArea, client));
 }
 
 // a coordinate is close to another iff
