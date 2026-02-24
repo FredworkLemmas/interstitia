@@ -84,4 +84,4 @@ This work is licensed under the GNU General Public License v3.0.
 This program comes with absolutely no warranty.  
 This is free software, and you are welcome to redistribute and/or modify it under certain conditions.
 
-If you like this project, you can star the [github repo](https://github.com/FredworkLemmas/interstitia) or review the script in the kde store [link TBD].
+If you like this project, you can star the [github repo](https://github.com/FredworkLemmas/interstitia) or review the script in the kde store [https://www.pling.com/p/2349376/].
