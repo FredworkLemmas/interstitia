@@ -1,0 +1,47 @@
+{
+    "KPackageStructure": "KWin/Script",
+    "KPlugin": {
+        "Authors": [
+            {
+                "Email": "natalie_clarius@yahoo.de",
+                "Name": "Natalie Clarius"
+            },
+            {
+                "Email": "ccatterina@proton.me",
+                "Name": "Claudio Catterina"
+            },
+            {
+                "Email": "fred@frameworklabs.us",
+                "Name": "Fred McDavid"
+            }
+        ],
+        "Description": "Adds space around windows touching a screen edge or other window. Supports Plasma 6.5 and 6.6.",
+        "Description[de]": "Fügt Abstände um Fenster hinzu, die den Bildschirmrand oder andere Fenster berühren. Unterstützt Plasma 6.5 und 6.6.",
+        "EnabledByDefault": true,
+        "Icon": "preferences-system-windows",
+        "Id": "interstitia",
+        "License": "GPLv3.0",
+        "Name": "Interstitia",
+        "Name[de]": "Interstitia",
+        "ServiceTypes": [
+            "KWin/Script",
+            "KCModule"
+        ],
+        "Version": "1.0.0",
+        "Website": "https://github.com/FredworkLemmas/interstitia"
+    },
+    "X-KDE-ConfigModule": "kwin/effects/configs/kcm_kwin4_genericscripted",
+    "X-KDE-KWin-Script-Config": "true",
+    "X-KDE-PluginInfo-Name": "interstitia",
+    "X-KDE-ParentComponents": [
+        "interstitia"
+    ],
+    "X-KDE-PluginKeyword": "interstitia",
+    "X-KDE-PluginInfo-Version": "1.0.0",
+    "X-KDE-PluginInfo-Website": "https://github.com/FredworkLemmas/interstitia",
+    "X-KDE-PluginInfo-Category": "KWin Script",
+    "X-KDE-PluginInfo-License": "GPLv3",
+    "X-KDE-PluginInfo-EnabledByDefault": "true",
+    "X-Plasma-API": "javascript",
+    "X-Plasma-MainScript": "code/main.js"
+}

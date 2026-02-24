@@ -1,0 +1,11 @@
+[Upstream]
+
+[ Pre-release edits ]
+- Updates to support Plasma 6.5
+- Updates to turn off border recalculation while dragging a window across screen(s)
+- Border calculation tweaks to allow for better consistency across applications.
+- Updates to support Plasma 6.6
+
+[ 1.0.0 ]
+- Renamed "Tile gaps" project to Interstitia
+- Reset versioning to 1.0.0
