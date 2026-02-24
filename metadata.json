@@ -27,7 +27,7 @@
             "KWin/Script",
             "KCModule"
         ],
-        "Version": "1.0.0",
+        "Version": "1.0.0a",
         "Website": "https://github.com/FredworkLemmas/interstitia"
     },
     "X-KDE-ConfigModule": "kwin/effects/configs/kcm_kwin4_genericscripted",
