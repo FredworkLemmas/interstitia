@@ -65,8 +65,12 @@ function copyGeometry(geometry) {
     };
 }
 
-function geometriesEqual(g1, g2) {
-    return g1.x == g2.x && g1.y == g2.y && g1.width == g2.width && g1.height == g2.height;
+function geometriesNearlyEqual(g1, g2) {
+    var threshold = 10;
+    return Math.abs(g1.x - g2.x) <= threshold &&
+           Math.abs(g1.y - g2.y) <= threshold &&
+           Math.abs(g1.width - g2.width) <= threshold &&
+           Math.abs(g1.height - g2.height) <= threshold;
 }
 
 ///////////////////////
@@ -229,6 +233,8 @@ debug("");
 
 if (typeof registerShortcut === 'undefined') {
     console.log("interstitia: main.js execution started");
+} else {
+    registerShortcut("interstitia: select same slot windows", "Interstitia: Select Same Slot Windows", "Ctrl+}", selectSameSlotWindows);
 }
 
 ///////////////////////
@@ -251,7 +257,8 @@ workspace.windowActivated.connect(client => {
 });
 
 // trigger applying tile gaps when client is initially present or added
-workspace.windowList().forEach(client => onAdded(client));
+const initialWindows = workspace.windowList ? workspace.windowList() : workspace.clientList();
+initialWindows.forEach(client => onAdded(client));
 workspace.windowAdded.connect(onAdded);
 
 function onAdded(client) {
@@ -326,9 +333,46 @@ function onRegeometrized(client) {
     });
 }
 
+function onSameActivity(window1, window2) {
+    const activities1 = window1.activities;
+    const activities2 = window2.activities;
+    if (!activities1 || !activities2) return true;
+    for (let a1 of activities1) {
+        for (let a2 of activities2) {
+            if (a1 == a2) return true;
+        }
+    }
+    return false;
+}
+
+function selectSameSlotWindows() {
+    debug("selectSameSlotWindows called");
+    const activeWindow = workspace.activeWindow || workspace.activeClient;
+    if (!activeWindow) {
+        debug("no active window");
+        return;
+    }
+
+    const geometry = isPlasma6 ? activeWindow.frameGeometry : activeWindow.geometry;
+    debug("Active window:", caption(activeWindow), "Geometry:", JSON.stringify(geometry));
+
+    const allWindows = workspace.windowList ? workspace.windowList() : workspace.clientList();
+    allWindows.forEach(window => {
+        if (window === activeWindow) return;
+
+        const windowGeometry = isPlasma6 ? window.frameGeometry : window.geometry;
+        if (onSameDesktop(activeWindow, window) &&
+            onSameActivity(activeWindow, window) &&
+            geometriesNearlyEqual(geometry, windowGeometry)) {
+            console.log("interstitia: Same slot window found:", caption(window), "Geometry:", JSON.stringify(windowGeometry));
+        }
+    });
+}
+
 // trigger reapplying tile gaps for all windows when screen geometry changes
 function applyGapsAll() {
-    workspace.windowList().forEach(client => applyGaps(client));
+    const allWindows = workspace.windowList ? workspace.windowList() : workspace.clientList();
+    allWindows.forEach(client => applyGaps(client));
 }
 
 onRelayouted();
@@ -446,7 +490,7 @@ function applyGaps(client) {
     applyGapsWindows(client, clientGeometries);
 
     for (const c of workspace.windowList()) {
-        if (c.internalId in clientGeometries && !geometriesEqual(c.frameGeometry, clientGeometries[c.internalId])) {
+        if (c.internalId in clientGeometries && !geometriesNearlyEqual(c.frameGeometry, clientGeometries[c.internalId])) {
             debug("set geometry", caption(c), geometry(clientGeometries[c.internalId]));
             c.frameGeometry = clientGeometries[c.internalId];
         }
@@ -545,10 +589,10 @@ function applyGapsArea(client, clientGeometries) {
     }
     // apply geo gapped on inner anchors if client is anchored on every side,
     // otherwise geo gapped on outer edges
-    if (Object.keys(grid).every((edge) => anchored[edge]) && !geometriesEqual(clientGeometry, gridded)) {
+    if (Object.keys(grid).every((edge) => anchored[edge]) && !geometriesNearlyEqual(clientGeometry, gridded)) {
         debug("set grid geometry", geometry(gridded));
         clientGeometries[client.internalId] = gridded;
-    } else if (!geometriesEqual(clientGeometry, edged)) {
+    } else if (!geometriesNearlyEqual(clientGeometry, edged)) {
         debug("set edge geometry", geometry(edged));
         clientGeometries[client.internalId] = edged;
     }
@@ -763,7 +807,7 @@ function getGrid(client) {
 
 // a client is maximized iff its geometry is equal to the maximize area
 function maximized(client) {
-    return geometriesEqual(client.frameGeometry, workspace.clientArea(KWin.MaximizeArea, client));
+    return geometriesNearlyEqual(client.frameGeometry, workspace.clientArea(KWin.MaximizeArea, client));
 }
 
 // a coordinate is close to another iff
