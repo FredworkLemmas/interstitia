@@ -10,3 +10,8 @@ def show_logs(c, pty=True):
 @task(namespace='dev', name='install')
 def install(c):
     c.run('sh ./install.sh')
+
+
+@task(namespace='dev', name='release')
+def install(c):
+    c.run('sh ./package.sh')

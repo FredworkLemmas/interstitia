@@ -77,6 +77,7 @@ To find the window class name of an application: Right-click on the titlebar of 
 ## Small Print
 
 © 2022-2023 Natalie Clarius \<natalie_clarius@yahoo.de\> [nclarius.github.io](https://nclarius.github.io)
+
 © 2026 Fred McDavid \<fred@frameworklabs.us\> [github.com/FredworkLemmas](https://github.com/FredworkLemmas)
 
 This work is licensed under the GNU General Public License v3.0.  
