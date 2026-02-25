@@ -31,10 +31,10 @@ function getWindowDesktops(window) {
     return [];
 }
 
-function getCurrentDesktop() {
-    if (workspace.currentDesktop !== undefined) return workspace.currentDesktop;
-    return null;
-}
+// function getCurrentDesktop() {
+//     if (workspace.currentDesktop !== undefined) return workspace.currentDesktop;
+//     return null;
+// }
 
 function onSameOutput(window1, window2) {
     return getWindowOutput(window1) == getWindowOutput(window2);
@@ -929,23 +929,23 @@ function overlapVer(win1, win2) {
 
 // floored/ceiled half difference between edges
 
-function halfDiffL(diff) {
-    return Math.floor(diff / 2);
-}
-
-function halfDiffU(diff) {
-    return Math.ceil(diff / 2);
-}
+// function halfDiffL(diff) {
+//     return Math.floor(diff / 2);
+// }
+//
+// function halfDiffU(diff) {
+//     return Math.ceil(diff / 2);
+// }
 
 // floored/ceiled half gap mid size
 
-function halfGapL() {
-    return Math.floor(gap.mid / 2);
-}
-
-function halfGapU() {
-    return Math.ceil(gap.mid / 2);
-}
+// function halfGapL() {
+//     return Math.floor(gap.mid / 2);
+// }
+//
+// function halfGapU() {
+//     return Math.ceil(gap.mid / 2);
+// }
 
 
 ///////////////////////
@@ -979,9 +979,9 @@ function ignoreOther(client1, client2) {
 ///////////////////////
 
 // stringify client object
-function properties(client) {
-    return JSON.stringify(client, undefined, 2);
-}
+// function properties(client) {
+//     return JSON.stringify(client, undefined, 2);
+// }
 
 // stringify client caption
 function caption(client) {
