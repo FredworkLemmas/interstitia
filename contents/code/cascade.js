@@ -11,7 +11,7 @@ function startCascade() {
     }
 
     debug("startCascade: enabling cascade state for group of", group.length);
-    group.forEach(window => {
+    group.forEach((window) => {
         if (!window.interstitia_cascade_data) {
             window.interstitia_cascade_data = {};
         }
@@ -19,7 +19,10 @@ function startCascade() {
         window.interstitia_cascade_data.timestamp = Date.now();
     });
 
-    applyCascadeGroup(activeWindow, group.filter(w => w !== activeWindow));
+    applyCascadeGroup(
+        activeWindow,
+        group.filter((w) => w !== activeWindow),
+    );
 }
 
 /**
@@ -34,7 +37,7 @@ function stopCascade() {
         return;
     }
     debug("stopCascade: disabling cascade state for group of", group.length);
-    group.forEach(window => {
+    group.forEach((window) => {
         if (!window.interstitia_cascade_data) {
             window.interstitia_cascade_data = {};
         }
@@ -42,7 +45,10 @@ function stopCascade() {
         window.interstitia_cascade_data.timestamp = Date.now();
     });
 
-    applyCascadeGroup(activeWindow, group.filter(w => w !== activeWindow));
+    applyCascadeGroup(
+        activeWindow,
+        group.filter((w) => w !== activeWindow),
+    );
 }
 
 /**
@@ -69,15 +75,17 @@ function applyCascade(client, applyGapsGeometry) {
     const allWindows = workspace.windowList ? workspace.windowList() : workspace.clientList();
     const otherClients = [];
 
-    allWindows.forEach(other => {
+    allWindows.forEach((other) => {
         if (other === client) return;
         if (ignoreClient(other)) return;
 
         const otherGeometry = isPlasma6 ? other.frameGeometry : other.geometry;
-        if (onSameDesktop(client, other) &&
+        if (
+            onSameDesktop(client, other) &&
             isOnSameActivity(client, other) &&
             getWindowOutput(client) === getWindowOutput(other) &&
-            geometriesNearlyEqual(applyGapsGeometry, otherGeometry)) {
+            geometriesNearlyEqual(applyGapsGeometry, otherGeometry)
+        ) {
             otherClients.push(other);
         }
     });
@@ -104,7 +112,7 @@ function removeCascadeIfNotApplying(client) {
     timer.interval = timeout;
     timer.singleShot = true;
     timer.timeout.connect(() => {
-        if (client.interstitia_cascade_data && (Date.now() - client.interstitia_cascade_data.timestamp >= timeout)) {
+        if (client.interstitia_cascade_data && Date.now() - client.interstitia_cascade_data.timestamp >= timeout) {
             debug("removeCascadeIfNotApplying: clearing cascade data for", getWindowCaption(client));
             delete client.interstitia_cascade_data;
         }
@@ -119,7 +127,7 @@ function removeCascadeIfNotApplying(client) {
  */
 function applyCascadeGroup(client, otherClients) {
     const group = [client].concat(otherClients);
-    const hasCascade = group.some(c => c.interstitia_cascade_data && c.interstitia_cascade_data.cascadeState);
+    const hasCascade = group.some((c) => c.interstitia_cascade_data && c.interstitia_cascade_data.cascadeState);
 
     // We need the applyGapsGeometry. If we are called from start/stopCascade, we might need to find it.
     let applyGapsGeometry = client.interstitia_cascade_data ? client.interstitia_cascade_data.applyGapsGeometry : null;
@@ -131,7 +139,7 @@ function applyCascadeGroup(client, otherClients) {
 
     if (!hasCascade) {
         debug("applyCascadeGroup: cascade is disabled, resetting geometries for slot");
-        group.forEach(c => {
+        group.forEach((c) => {
             c.frameGeometry = copyGeometry(applyGapsGeometry);
         });
         return;
@@ -139,33 +147,33 @@ function applyCascadeGroup(client, otherClients) {
 
     const offset = 32;
     const numWindows = group.length;
-    const newWidth = applyGapsGeometry.width - (offset * (numWindows - 1));
-    const newHeight = applyGapsGeometry.height - (offset * (numWindows - 1));
+    const newWidth = applyGapsGeometry.width - offset * (numWindows - 1);
+    const newHeight = applyGapsGeometry.height - offset * (numWindows - 1);
 
     debug("applyCascadeGroup: cascading", numWindows, "windows with offset", offset);
 
     // Filter out the primary client for initial positioning
-    const others = group.filter(c => c !== client);
+    const others = group.filter((c) => c !== client);
 
     // Position the primary client last (on top)
     const clientGeo = {
-        x: applyGapsGeometry.x + (others.length * offset),
-        y: applyGapsGeometry.y + (others.length * offset),
+        x: applyGapsGeometry.x + others.length * offset,
+        y: applyGapsGeometry.y + others.length * offset,
         width: newWidth,
-        height: newHeight
+        height: newHeight,
     };
     debug("positioning primary cascaded window:", getWindowCaption(client), "on top at", clientGeo.x, clientGeo.y);
-    
+
     // Set block to true to prevent frameGeometryChanged from triggering applyGaps recursively
     block = true;
     try {
         // Re-applying to all in group
         others.forEach((c, index) => {
-             const newGeo = {
-                x: applyGapsGeometry.x + (index * offset),
-                y: applyGapsGeometry.y + (index * offset),
+            const newGeo = {
+                x: applyGapsGeometry.x + index * offset,
+                y: applyGapsGeometry.y + index * offset,
                 width: newWidth,
-                height: newHeight
+                height: newHeight,
             };
             debug("positioning cascaded window:", getWindowCaption(c), "at", newGeo.x, newGeo.y);
             c.frameGeometry = newGeo;

@@ -4,7 +4,7 @@
 function applyGapsAll() {
     console.log("interstitia: applyGapsAll triggered");
     const allWindows = workspace.windowList ? workspace.windowList() : workspace.clientList();
-    allWindows.forEach(client => applyGaps(client));
+    allWindows.forEach((client) => applyGaps(client));
 }
 
 /**
@@ -13,7 +13,6 @@ function applyGapsAll() {
  * @param {boolean} [updateCascade=false] - Whether to update cascade layout for the client's slot.
  */
 function applyGaps(client, updateCascade = false) {
-
     // abort if there is a current iteration of gapping still running,
     // or if the client is null or irrelevant
     if (block || !client || ignoreClient(client)) return;
@@ -27,25 +26,37 @@ function applyGaps(client, updateCascade = false) {
     // handle mouse drag or resize
     if (mouseDragOrResizeInProgress) {
         debug(
-        "screen:", getWindowOutput(client), "x:",
-            client.x, "y:", client.y,
-            "width:", client.width,
-            "height:", client.height);
+            "screen:",
+            getWindowOutput(client),
+            "x:",
+            client.x,
+            "y:",
+            client.y,
+            "width:",
+            client.width,
+            "height:",
+            client.height,
+        );
         if (!mouseDragOrResizeStartingGeometry) {
             mouseDragOrResizeStartTime = Date.now();
             mouseDragOrResizeNumUpdates = 1;
             mouseDragOrResizeStartingGeometry = {
-                'x': client.x,
-                'y': client.y,
-                'w': client.width,
-                'h': client.height,
+                x: client.x,
+                y: client.y,
+                w: client.width,
+                h: client.height,
             };
         }
 
         debug(
-            "apply gaps", getWindowCaption(client),
-            config.includeMaximized, isMaximized(client), block,
-            "mouseDrag:", mouseDragOrResizeInProgress);
+            "apply gaps",
+            getWindowCaption(client),
+            config.includeMaximized,
+            isMaximized(client),
+            block,
+            "mouseDrag:",
+            mouseDragOrResizeInProgress,
+        );
 
         // return silently if it's only been less than 750ms since
         // we started dragging
@@ -54,16 +65,14 @@ function applyGaps(client, updateCascade = false) {
         // return silently if the width and height are unchanged since
         // we started dragging (meaning the user is dragging and not
         // resizing the window)
-        if (client.width == mouseDragOrResizeStartingGeometry.w &&
-            client.height == mouseDragOrResizeStartingGeometry.h) return;
-
-    }
-    else if (mouseDragOrResizeStartingGeometry) {
+        if (client.width == mouseDragOrResizeStartingGeometry.w && client.height == mouseDragOrResizeStartingGeometry.h)
+            return;
+    } else if (mouseDragOrResizeStartingGeometry) {
         mouseDragOrResizeStartingGeometry = null;
     }
     // block applying other gaps as long as current iteration is running
     block = true;
-    debug("----------------")
+    debug("----------------");
     debug("gaps for", getWindowCaption(client));
     debug("old geo", getWindowGeometry(client));
 
@@ -104,7 +113,7 @@ function applyGapsArea(client, clientGeometries) {
     let area = getArea(client);
     debug("area", getWindowGeometry(area));
     let grid = getGrid(client);
-    let anchored = {"left": false, "right": false, "top": false, "bottom": false};
+    let anchored = { left: false, right: false, top: false, bottom: false };
     let gridded = copyGeometry(clientGeometry);
     let edged = copyGeometry(clientGeometry);
 
@@ -137,7 +146,6 @@ function applyGapsArea(client, clientGeometries) {
                 anchored[edge] = true;
                 let diff = coords.gapped - coords.win;
                 switch (edge) {
-
                     case "left":
                         gridded.x = Math.round(gridded.x + diff);
                         gridded.width = Math.round(gridded.width - diff);
@@ -229,10 +237,8 @@ function applyGapsWindows(client1, clientGeometries) {
         for (let i = 0; i < Object.keys(grid).length; i++) {
             let edge = Object.keys(grid)[i];
             switch (edge) {
-
                 case "left":
-                    if (nearWindow(win1.x, win2.right, gap.mid) &&
-                        overlapVer(win1, win2)) {
+                    if (nearWindow(win1.x, win2.right, gap.mid) && overlapVer(win1, win2)) {
                         debug("gap to window", edge, getWindowCaption(client2), getWindowGeometry(client2));
                         let diff = win1.x - win2.right;
                         let halfGap = Math.floor(gap.mid / 2);
@@ -250,8 +256,7 @@ function applyGapsWindows(client1, clientGeometries) {
                     break;
 
                 case "right":
-                    if (nearWindow(win2.x, win1.right, gap.mid) &&
-                        overlapVer(win1, win2)) {
+                    if (nearWindow(win2.x, win1.right, gap.mid) && overlapVer(win1, win2)) {
                         debug("gap to window", edge, getWindowCaption(client2), getWindowGeometry(client2));
                         let diff = win2.x - win1.right;
                         let halfGap = Math.floor(gap.mid / 2);
@@ -269,8 +274,7 @@ function applyGapsWindows(client1, clientGeometries) {
                     break;
 
                 case "top":
-                    if (nearWindow(win1.y, win2.bottom, gap.mid) &&
-                        overlapHor(win1, win2)) {
+                    if (nearWindow(win1.y, win2.bottom, gap.mid) && overlapHor(win1, win2)) {
                         debug("gap to window", edge, getWindowCaption(client2), getWindowGeometry(client2));
                         let diff = win1.y - win2.bottom;
                         let halfGap = Math.floor(gap.mid / 2);
@@ -288,8 +292,7 @@ function applyGapsWindows(client1, clientGeometries) {
                     break;
 
                 case "bottom":
-                    if (nearWindow(win2.y, win1.bottom, gap.mid) &&
-                        overlapHor(win1, win2)) {
+                    if (nearWindow(win2.y, win1.bottom, gap.mid) && overlapHor(win1, win2)) {
                         debug("gap to window", edge, getWindowCaption(client2), getWindowGeometry(client2));
                         let diff = win2.y - win1.bottom;
                         let halfGap = Math.floor(gap.mid / 2);

@@ -62,7 +62,7 @@ function copyGeometry(geometry) {
         left: geometry.x,
         top: geometry.y,
         right: geometry.x + geometry.width,
-        bottom: geometry.y + geometry.height
+        bottom: geometry.y + geometry.height,
     };
 }
 
@@ -84,10 +84,12 @@ function geometriesEqual(g1, g2) {
  */
 function geometriesNearlyEqual(g1, g2) {
     var threshold = 10;
-    return Math.abs(g1.x - g2.x) <= threshold &&
-           Math.abs(g1.y - g2.y) <= threshold &&
-           Math.abs(g1.width - g2.width) <= threshold &&
-           Math.abs(g1.height - g2.height) <= threshold;
+    return (
+        Math.abs(g1.x - g2.x) <= threshold &&
+        Math.abs(g1.y - g2.y) <= threshold &&
+        Math.abs(g1.width - g2.width) <= threshold &&
+        Math.abs(g1.height - g2.height) <= threshold
+    );
 }
 
 /**
@@ -126,12 +128,19 @@ function selectSameSlotWindows() {
 
     const allWindows = workspace.windowList ? workspace.windowList() : workspace.clientList();
     const sameSlotWindows = [];
-    allWindows.forEach(window => {
+    allWindows.forEach((window) => {
         const windowGeometry = isPlasma6 ? window.frameGeometry : window.geometry;
-        if (onSameDesktop(activeWindow, window) &&
+        if (
+            onSameDesktop(activeWindow, window) &&
             isOnSameActivity(activeWindow, window) &&
-            geometriesNearlyEqual(fg, windowGeometry)) {
-            console.log("interstitia: Same slot window found:", getWindowCaption(window), "Geometry:", JSON.stringify(windowGeometry));
+            geometriesNearlyEqual(fg, windowGeometry)
+        ) {
+            console.log(
+                "interstitia: Same slot window found:",
+                getWindowCaption(window),
+                "Geometry:",
+                JSON.stringify(windowGeometry),
+            );
             sameSlotWindows.push(window);
         }
     });
@@ -159,75 +168,75 @@ function getGrid(client) {
         left: {
             fullLeft: {
                 closed: Math.round(area.left),
-                gapped: Math.round(area.left + gap.left - (panel.left && unmaximized ? gap.left : 0))
+                gapped: Math.round(area.left + gap.left - (panel.left && unmaximized ? gap.left : 0)),
             },
             quarterLeft: {
                 closed: Math.round(area.left + 1 * (area.width / 4)),
-                gapped: Math.round(area.left + 1 * (area.width + gap.left - gap.right + gap.mid) / 4)
+                gapped: Math.round(area.left + (1 * (area.width + gap.left - gap.right + gap.mid)) / 4),
             },
             halfHorizontal: {
                 closed: Math.round(area.left + area.width / 2),
-                gapped: Math.round(area.left + (area.width + gap.left - gap.right + gap.mid) / 2)
+                gapped: Math.round(area.left + (area.width + gap.left - gap.right + gap.mid) / 2),
             },
             quarterRight: {
                 closed: Math.round(area.left + 3 * (area.width / 4)),
-                gapped: Math.round(area.left + 3 * (area.width + gap.left - gap.right + gap.mid) / 4)
-            }
+                gapped: Math.round(area.left + (3 * (area.width + gap.left - gap.right + gap.mid)) / 4),
+            },
         },
         right: {
             quarterLeft: {
                 closed: Math.round(area.right - 3 * (area.width / 4)),
-                gapped: Math.round(area.right - 3 * (area.width + gap.left - gap.right + gap.mid) / 4)
+                gapped: Math.round(area.right - (3 * (area.width + gap.left - gap.right + gap.mid)) / 4),
             },
             halfHorizontal: {
                 closed: Math.round(area.right - area.width / 2),
-                gapped: Math.round(area.right - (area.width + gap.left - gap.right + gap.mid) / 2)
+                gapped: Math.round(area.right - (area.width + gap.left - gap.right + gap.mid) / 2),
             },
             quarterRight: {
                 closed: Math.round(area.right - 1 * (area.width / 4)),
-                gapped: Math.round(area.right - 1 * (area.width + gap.left - gap.right + gap.mid) / 4)
+                gapped: Math.round(area.right - (1 * (area.width + gap.left - gap.right + gap.mid)) / 4),
             },
             fullRight: {
                 closed: Math.round(area.right),
-                gapped: Math.round(area.right - gap.right + (panel.right && unmaximized ? gap.right : 0))
-            }
+                gapped: Math.round(area.right - gap.right + (panel.right && unmaximized ? gap.right : 0)),
+            },
         },
         top: {
             fullTop: {
                 closed: Math.round(area.top),
-                gapped: Math.round(area.top + gap.top - (panel.top && unmaximized ? gap.top : 0))
+                gapped: Math.round(area.top + gap.top - (panel.top && unmaximized ? gap.top : 0)),
             },
             quarterTop: {
                 closed: Math.round(area.top + 1 * (area.height / 4)),
-                gapped: Math.round(area.top + 1 * (area.height + gap.top - gap.bottom + gap.mid) / 4)
+                gapped: Math.round(area.top + (1 * (area.height + gap.top - gap.bottom + gap.mid)) / 4),
             },
             halfVertical: {
                 closed: Math.round(area.top + area.height / 2),
-                gapped: Math.round(area.top + (area.height + gap.top - gap.bottom + gap.mid) / 2)
+                gapped: Math.round(area.top + (area.height + gap.top - gap.bottom + gap.mid) / 2),
             },
             quarterBottom: {
                 closed: Math.round(area.top + 3 * (area.height / 4)),
-                gapped: Math.round(area.top + 3 * (area.height + gap.top - gap.bottom + gap.mid) / 4)
-            }
+                gapped: Math.round(area.top + (3 * (area.height + gap.top - gap.bottom + gap.mid)) / 4),
+            },
         },
         bottom: {
             quarterTop: {
                 closed: Math.round(area.bottom - 3 * (area.height / 4)),
-                gapped: Math.round(area.bottom - 3 * (area.height + gap.top - gap.bottom + gap.mid) / 4)
+                gapped: Math.round(area.bottom - (3 * (area.height + gap.top - gap.bottom + gap.mid)) / 4),
             },
             halfVertical: {
                 closed: Math.round(area.bottom - area.height / 2),
-                gapped: Math.round(area.bottom - (area.height + gap.top - gap.bottom + gap.mid) / 2)
+                gapped: Math.round(area.bottom - (area.height + gap.top - gap.bottom + gap.mid) / 2),
             },
             quarterBottom: {
                 closed: Math.round(area.bottom - 1 * (area.height / 4)),
-                gapped: Math.round(area.bottom - 1 * (area.height + gap.top - gap.bottom + gap.mid) / 4)
+                gapped: Math.round(area.bottom - (1 * (area.height + gap.top - gap.bottom + gap.mid)) / 4),
             },
             fullBottom: {
                 closed: Math.round(area.bottom),
-                gapped: Math.round(area.bottom - gap.bottom + (panel.bottom && unmaximized ? gap.bottom : 0))
-            }
-        }
+                gapped: Math.round(area.bottom - gap.bottom + (panel.bottom && unmaximized ? gap.bottom : 0)),
+            },
+        },
     };
 }
 
@@ -241,7 +250,7 @@ function getGrid(client) {
  */
 function nearArea(actual, expected_closed, expected_gapped, gapSize) {
     let tolerance = gapSize + 2;
-    return (Math.abs(actual - expected_closed) <= tolerance || Math.abs(actual - expected_gapped) <= tolerance);
+    return Math.abs(actual - expected_closed) <= tolerance || Math.abs(actual - expected_gapped) <= tolerance;
 }
 
 /**
@@ -265,8 +274,10 @@ function nearWindow(win1, win2, gapSize) {
  */
 function overlapHor(win1, win2) {
     let tolerance = 2 * gap.mid;
-    return (win1.left <= win2.left + tolerance && win1.right > win2.left + tolerance)
-        || (win2.left <= win1.left + tolerance && win2.right + tolerance > win1.left);
+    return (
+        (win1.left <= win2.left + tolerance && win1.right > win2.left + tolerance) ||
+        (win2.left <= win1.left + tolerance && win2.right + tolerance > win1.left)
+    );
 }
 
 /**
@@ -277,8 +288,10 @@ function overlapHor(win1, win2) {
  */
 function overlapVer(win1, win2) {
     let tolerance = 2 * gap.mid;
-    return (win1.top <= win2.top + tolerance && win1.bottom > win2.top + tolerance)
-        || (win2.top <= win1.top + tolerance && win2.bottom + tolerance > win1.top);
+    return (
+        (win1.top <= win2.top + tolerance && win1.bottom > win2.top + tolerance) ||
+        (win2.top <= win1.top + tolerance && win2.bottom + tolerance > win1.top)
+    );
 }
 
 /**
@@ -287,15 +300,17 @@ function overlapVer(win1, win2) {
  * @returns {boolean}
  */
 function ignoreClient(client) {
-    return !client // null
-        || !client.normalWindow // not normal
-        || !client.resizeable // not resizeable
-        || client.fullScreen // fullscreen
-        || (!config.includeMaximized && isMaximized(client)) // maximized
-        || (config.excludeMode // excluded application
-            && config.applications.includes(String(client.resourceClass)))
-        || (config.includeMode // non-included application
-            && !(config.applications.includes(String(client.resourceClass))));
+    return (
+        !client || // null
+        !client.normalWindow || // not normal
+        !client.resizeable || // not resizeable
+        client.fullScreen || // fullscreen
+        (!config.includeMaximized && isMaximized(client)) || // maximized
+        (config.excludeMode && // excluded application
+            config.applications.includes(String(client.resourceClass))) ||
+        (config.includeMode && // non-included application
+            !config.applications.includes(String(client.resourceClass)))
+    );
 }
 
 /**
@@ -305,11 +320,13 @@ function ignoreClient(client) {
  * @returns {boolean}
  */
 function ignoreOther(client1, client2) {
-    return ignoreClient(client2)
-        || client2 == client1
-        || !onSameDesktop(client1, client2)
-        || !onSameOutput(client1, client2)
-        || client2.minimized;
+    return (
+        ignoreClient(client2) ||
+        client2 == client1 ||
+        !onSameDesktop(client1, client2) ||
+        !onSameOutput(client1, client2) ||
+        client2.minimized
+    );
 }
 
 /**

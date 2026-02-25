@@ -33,7 +33,6 @@ function setupMouseDragTracking(client) {
  * @param {KWin.Window} client
  */
 function onRegeometrized(client) {
-
     client.moveResizedChanged.connect(() => {
         debug("move resized changed", getWindowCaption(client));
         removeCascadeIfNotApplying(client);
@@ -49,7 +48,7 @@ function onRegeometrized(client) {
     client.interactiveMoveResizeFinished.connect(() => {
         debug("finish user moved resized", getWindowCaption(client));
         // Small delay to ensure mouseDragInProgress is set to false first
-        workspace.slotWindowClose.connect(() => {});  // Dummy to ensure event loop processes
+        workspace.slotWindowClose.connect(() => {}); // Dummy to ensure event loop processes
         removeCascadeIfNotApplying(client);
         applyGaps(client);
     });

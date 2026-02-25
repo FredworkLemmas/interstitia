@@ -3,7 +3,7 @@
 */
 
 // compatibility and startup
-const isPlasma6 = (typeof workspace.windowList === 'function');
+const isPlasma6 = typeof workspace.windowList === "function";
 console.log("interstitia: main.js execution started, isPlasma6:", isPlasma6);
 console.log("interstitia: main.js execution started at " + new Date().toISOString());
 

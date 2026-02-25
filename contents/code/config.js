@@ -25,9 +25,9 @@ const config = { includeMaximized: false, excludeMode: true, includeMode: false,
 function readConfigValue(key, defaultValue) {
     var val = defaultValue;
     var source = "default";
-    
+
     try {
-        if (typeof readConfig === 'function') {
+        if (typeof readConfig === "function") {
             // Standard KWin Scripting API
             // Try Script-interstitia specifically (this matches our main.xml group)
             var gVal = readConfig(key, "MISSING", "Script-interstitia");
@@ -63,7 +63,7 @@ function readConfigValue(key, defaultValue) {
                     }
                 }
             }
-        } else if (typeof KWin !== 'undefined' && typeof KWin.readConfig === 'function') {
+        } else if (typeof KWin !== "undefined" && typeof KWin.readConfig === "function") {
             // KWin.readConfig API
             // Try Script-interstitia
             var gVal = KWin.readConfig(key, "MISSING", "Script-interstitia");
@@ -97,16 +97,16 @@ function readConfigValue(key, defaultValue) {
                     }
                 }
             }
-        } else if (typeof options !== 'undefined' && options[key] !== undefined) {
+        } else if (typeof options !== "undefined" && options[key] !== undefined) {
             val = options[key];
             source = "options";
         }
     } catch (e) {
         console.log("interstitia: error reading config key " + key + ": " + e);
     }
-    
+
     // Check if debugMode is defined before using it (it's loaded first)
-    if (typeof debugMode !== 'undefined' && debugMode) {
+    if (typeof debugMode !== "undefined" && debugMode) {
         console.log("interstitia: CONFIG_CHECK [" + key + "] = " + val + " (" + source + ")");
     }
     return val;
@@ -117,7 +117,7 @@ function readConfigValue(key, defaultValue) {
  */
 function loadConfig() {
     console.log("interstitia: loadConfig() CALLED");
-    
+
     debugMode = Boolean(readConfigValue("debugMode", true));
     fullDebugMode = Boolean(readConfigValue("fullDebugMode", false));
 
@@ -137,6 +137,5 @@ function loadConfig() {
     config.includeMode = Boolean(readConfigValue("includeMode", false));
     config.applications = String(readConfigValue("applications", "")).toLowerCase().split("\n");
 
-    console.log("interstitia: loaded sizes (l/r/t/b/m):",
-        gap.left, gap.right, gap.top, gap.bottom, gap.mid);
+    console.log("interstitia: loaded sizes (l/r/t/b/m):", gap.left, gap.right, gap.top, gap.bottom, gap.mid);
 }

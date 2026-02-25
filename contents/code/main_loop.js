@@ -13,7 +13,7 @@ debug("initializing");
 
 debug("");
 
-if (typeof registerShortcut === 'undefined') {
+if (typeof registerShortcut === "undefined") {
     console.log("interstitia: registerShortcut is UNDEFINED");
 } else {
     console.log("interstitia: registering shortcuts");
@@ -27,13 +27,13 @@ if (typeof registerShortcut === 'undefined') {
 }
 
 // event wiring
-workspace.windowActivated.connect(client => {
+workspace.windowActivated.connect((client) => {
     if (!client) return;
     // debug(getWindowCaption(client), getWindowGeometry(client));
 });
 
 const initialWindows = workspace.windowList ? workspace.windowList() : workspace.clientList();
-initialWindows.forEach(client => onAdded(client));
+initialWindows.forEach((client) => onAdded(client));
 workspace.windowAdded.connect(onAdded);
 
 onRelayouted();
