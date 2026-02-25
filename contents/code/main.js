@@ -238,11 +238,18 @@ if (workspace.configChanged !== undefined) {
 debug("intializing");
 debug("");
 
+console.log("interstitia: main.js execution started, registerShortcut type:", typeof registerShortcut);
 if (typeof registerShortcut === 'undefined') {
-    console.log("interstitia: main.js execution started");
+    console.log("interstitia: registerShortcut is UNDEFINED");
 } else {
-    registerShortcut("interstitia_start_cascade", "Interstitia: Start Cascade", "Ctrl+}", startCascade);
-    registerShortcut("interstitia_stop_cascade", "Interstitia: Stop Cascade", "Ctrl+{", stopCascade);
+    console.log("interstitia: registering shortcuts");
+    try {
+        registerShortcut("interstitia_start_cascade", "Interstitia: Start Cascade", "Ctrl+}", startCascade);
+        registerShortcut("interstitia_stop_cascade", "Interstitia: Stop Cascade", "Ctrl+{", stopCascade);
+        console.log("interstitia: shortcuts registered successfully (Ctrl+}, Ctrl+{)");
+    } catch (e) {
+        console.log("interstitia: error registering shortcuts:", e);
+    }
 }
 
 ///////////////////////
@@ -434,6 +441,7 @@ function stopCascade() {
 
 // trigger reapplying tile gaps for all windows when screen geometry changes
 function applyGapsAll() {
+    console.log("interstitia: applyGapsAll triggered");
     const allWindows = workspace.windowList ? workspace.windowList() : workspace.clientList();
     allWindows.forEach(client => applyGaps(client));
 }
@@ -498,6 +506,12 @@ function applyGaps(client, updateCascade = false) {
     // abort if there is a current iteration of gapping still running,
     // or if the client is null or irrelevant
     if (block || !client || ignoreClient(client)) return;
+
+    // Skip if window is part of an active cascade and we are not explicitly updating cascade
+    if (client.interstitia_cascade_data && client.interstitia_cascade_data.cascadeState && !updateCascade) {
+        debug("applyGaps: skipping because window is in cascade state:", caption(client));
+        return;
+    }
 
     // handle mouse drag or resize
     if (mouseDragOrResizeInProgress) {
@@ -1020,6 +1034,14 @@ function applyCascade(client, applyGapsGeometry) {
 function removeCascadeIfNotApplying(client) {
     if (!client || !client.interstitia_cascade_data) return;
 
+    // If cascadeState is true, we want to keep it until explicitly stopped or window moved out of slot
+    if (client.interstitia_cascade_data.cascadeState) {
+        // If the window has moved significantly from its expected cascade position, we might want to clear it,
+        // but for now let's trust the manual stopCascade.
+        // One exception: if it's no longer in the same desktop/activity/screen.
+        return;
+    }
+
     // Use a timer to check if applyCascade was called recently
     const timeout = 500;
     const checkTime = Date.now();
@@ -1071,17 +1093,6 @@ function applyCascadeGroup(client, otherClients) {
     // Filter out the primary client for initial positioning
     const others = group.filter(c => c !== client);
 
-    others.forEach((c, index) => {
-        const newGeo = {
-            x: applyGapsGeometry.x + (index * offset),
-            y: applyGapsGeometry.y + (index * offset),
-            width: newWidth,
-            height: applyGapsGeometry.height
-        };
-        debug("positioning cascaded window:", caption(c), "at", newGeo.x, newGeo.y);
-        c.frameGeometry = newGeo;
-    });
-
     // Position the primary client last (on top)
     const clientGeo = {
         x: applyGapsGeometry.x + (others.length * offset),
@@ -1090,7 +1101,25 @@ function applyCascadeGroup(client, otherClients) {
         height: applyGapsGeometry.height
     };
     debug("positioning primary cascaded window:", caption(client), "on top at", clientGeo.x, clientGeo.y);
-    client.frameGeometry = clientGeo;
+    
+    // Set block to true to prevent frameGeometryChanged from triggering applyGaps recursively
+    block = true;
+    try {
+        // Re-applying to all in group
+        others.forEach((c, index) => {
+             const newGeo = {
+                x: applyGapsGeometry.x + (index * offset),
+                y: applyGapsGeometry.y + (index * offset),
+                width: newWidth,
+                height: applyGapsGeometry.height
+            };
+            debug("positioning cascaded window:", caption(c), "at", newGeo.x, newGeo.y);
+            c.frameGeometry = newGeo;
+        });
+        client.frameGeometry = clientGeo;
+    } finally {
+        block = false;
+    }
 
     // Raise the primary client
     workspace.activeWindow = client;
