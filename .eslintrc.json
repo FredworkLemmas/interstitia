@@ -1,0 +1,56 @@
+{
+  "env": {
+    "browser": true,
+    "es2021": true,
+    "jest/globals": true
+  },
+  "extends": [
+    "eslint:recommended",
+    "plugin:jest/recommended",
+    "prettier"
+  ],
+  "parserOptions": {
+    "ecmaVersion": "latest",
+    "sourceType": "script"
+  },
+  "plugins": ["jest"],
+  "rules": {
+  },
+  "globals": {
+    "workspace": "readonly",
+    "debugMode": "writable",
+    "fullDebugMode": "writable",
+    "isPlasma6": "readonly",
+    "debug": "writable",
+    "fulldebug": "writable",
+    "readConfig": "readonly",
+    "KWin": "readonly",
+    "options": "readonly",
+    "gap": "writable",
+    "panel": "writable",
+    "config": "writable",
+    "loadConfig": "writable",
+    "applyGaps": "writable",
+    "applyGapsAll": "writable",
+    "onAdded": "writable",
+    "onRegeometrized": "writable",
+    "setupMouseDragTracking": "writable",
+    "onRelayouted": "writable",
+    "startCascade": "writable",
+    "stopCascade": "writable",
+    "selectSameSlotWindows": "writable",
+    "applyCascade": "writable",
+    "applyCascadeGroup": "writable",
+    "removeCascadeIfNotApplying": "writable",
+    "getWindowOutput": "readonly",
+    "copyGeometry": "readonly",
+    "ignoreClient": "readonly",
+    "onSameDesktop": "readonly",
+    "isOnSameActivity": "readonly",
+    "geometriesNearlyEqual": "readonly",
+    "getWindowCaption": "readonly",
+    "getWindowGeometry": "readonly",
+    "QTimer": "readonly",
+    "registerShortcut": "readonly"
+  }
+}
