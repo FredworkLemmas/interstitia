@@ -241,7 +241,8 @@ debug("");
 if (typeof registerShortcut === 'undefined') {
     console.log("interstitia: main.js execution started");
 } else {
-    registerShortcut("interstitia: select same slot windows", "Interstitia: Select Same Slot Windows", "Ctrl+}", selectSameSlotWindows);
+    registerShortcut("interstitia: start cascade", "Interstitia: Start Cascade", "Ctrl+}", startCascade);
+    registerShortcut("interstitia: stop cascade", "Interstitia: Stop Cascade", "Ctrl+{", stopCascade);
 }
 
 ///////////////////////
@@ -296,10 +297,12 @@ function onRegeometrized(client) {
 
     client.moveResizedChanged.connect(() => {
         debug("move resized changed", caption(client));
+        removeCascadeIfNotApplying(client);
         applyGaps(client);
     });
     client.frameGeometryChanged.connect(() => {
         debug("frame geometry changed", caption(client));
+        removeCascadeIfNotApplying(client);
         applyGaps(client);
     });
     // When interactive move/resize finishes, wait briefly then apply gaps
@@ -308,34 +311,42 @@ function onRegeometrized(client) {
         debug("finish user moved resized", caption(client));
         // Small delay to ensure mouseDragInProgress is set to false first
         workspace.slotWindowClose.connect(() => {});  // Dummy to ensure event loop processes
+        removeCascadeIfNotApplying(client);
         applyGaps(client);
     });
     client.fullScreenChanged.connect(() => {
         debug("fullscreen changed", caption(client));
+        removeCascadeIfNotApplying(client);
         applyGaps(client);
     });
     client.maximizedChanged.connect(() => {
         debug("maximized changed", caption(client));
+        removeCascadeIfNotApplying(client);
         applyGaps(client);
     });
     client.minimizedChanged.connect(() => {
         debug("unminimized", caption(client));
+        removeCascadeIfNotApplying(client);
         applyGaps(client);
     });
     client.quickTileModeChanged.connect(() => {
         debug("tile mode changed", caption(client));
-        applyGaps(client);
+        debug("triggering cascade check for", caption(client), "due to tile change");
+        applyGaps(client, true);
     });
     client.tileChanged.connect(() => {
         debug("tile changed", caption(client));
-        applyGaps(client);
+        debug("triggering cascade check for", caption(client), "due to tile change");
+        applyGaps(client, true);
     });
     client.desktopsChanged.connect(() => {
         debug("desktops changed", caption(client));
+        removeCascadeIfNotApplying(client);
         applyGaps(client);
     });
     client.activitiesChanged.connect(() => {
         debug("activities changed", caption(client));
+        removeCascadeIfNotApplying(client);
         applyGaps(client);
     });
 }
@@ -357,23 +368,61 @@ function selectSameSlotWindows() {
     const activeWindow = workspace.activeWindow || workspace.activeClient;
     if (!activeWindow) {
         debug("no active window");
-        return;
+        return [];
     }
 
     const geometry = isPlasma6 ? activeWindow.frameGeometry : activeWindow.geometry;
     debug("Active window:", caption(activeWindow), "Geometry:", JSON.stringify(geometry));
+    debug("selectSameSlotWindows: searching for windows in the same slot as", caption(activeWindow));
 
     const allWindows = workspace.windowList ? workspace.windowList() : workspace.clientList();
+    const sameSlotWindows = [];
     allWindows.forEach(window => {
-        if (window === activeWindow) return;
-
         const windowGeometry = isPlasma6 ? window.frameGeometry : window.geometry;
         if (onSameDesktop(activeWindow, window) &&
             onSameActivity(activeWindow, window) &&
             geometriesNearlyEqual(geometry, windowGeometry)) {
             console.log("interstitia: Same slot window found:", caption(window), "Geometry:", JSON.stringify(windowGeometry));
+            sameSlotWindows.push(window);
         }
     });
+    return sameSlotWindows;
+}
+
+function startCascade() {
+    const group = selectSameSlotWindows();
+    const activeWindow = workspace.activeWindow || workspace.activeClient;
+    if (!activeWindow) return;
+
+    debug("startCascade: enabling cascade state for group of", group.length);
+    group.forEach(window => {
+        if (!window.interstitia_cascade_data) {
+            window.interstitia_cascade_data = {};
+        }
+        window.interstitia_cascade_data.cascadeState = true;
+        window.interstitia_cascade_data.timestamp = Date.now();
+    });
+
+    const activeWindowGeometry = isPlasma6 ? activeWindow.frameGeometry : activeWindow.geometry;
+    applyCascadeGroup(activeWindow, group.filter(w => w !== activeWindow));
+}
+
+function stopCascade() {
+    const group = selectSameSlotWindows();
+    const activeWindow = workspace.activeWindow || workspace.activeClient;
+    if (!activeWindow) return;
+
+    debug("stopCascade: disabling cascade state for group of", group.length);
+    group.forEach(window => {
+        if (!window.interstitia_cascade_data) {
+            window.interstitia_cascade_data = {};
+        }
+        window.interstitia_cascade_data.cascadeState = false;
+        window.interstitia_cascade_data.timestamp = Date.now();
+    });
+
+    const activeWindowGeometry = isPlasma6 ? activeWindow.frameGeometry : activeWindow.geometry;
+    applyCascadeGroup(activeWindow, group.filter(w => w !== activeWindow));
 }
 
 // trigger reapplying tile gaps for all windows when screen geometry changes
@@ -437,7 +486,7 @@ function onRelayouted() {
 ///////////////////////
 
 // make gaps for given client
-function applyGaps(client) {
+function applyGaps(client, updateCascade = false) {
 
     // abort if there is a current iteration of gapping still running,
     // or if the client is null or irrelevant
@@ -504,6 +553,11 @@ function applyGaps(client) {
     }
 
     block = false;
+
+    if (updateCascade) {
+        debug("applyGaps: updateCascade is true for", caption(client));
+        applyCascade(client, clientGeometries[client.internalId]);
+    }
 
     debug("");
 }
@@ -918,4 +972,120 @@ function geometry(client) {
     return ["x", client.x, client.width, client.x + client.width,
         "y", client.y, client.height, client.y + client.height
     ].join(" ");
+}
+
+function applyCascade(client, applyGapsGeometry) {
+    if (!client) return;
+
+    if (!client.interstitia_cascade_data) {
+        client.interstitia_cascade_data = {};
+    }
+
+    client.interstitia_cascade_data.activities = client.activities;
+    client.interstitia_cascade_data.desktops = client.desktops;
+    client.interstitia_cascade_data.screen = getWindowOutput(client);
+    client.interstitia_cascade_data.applyGapsGeometry = copyGeometry(applyGapsGeometry);
+    if (client.interstitia_cascade_data.cascadeState === undefined) {
+        client.interstitia_cascade_data.cascadeState = false;
+    }
+    client.interstitia_cascade_data.timestamp = Date.now();
+
+    const allWindows = workspace.windowList ? workspace.windowList() : workspace.clientList();
+    const otherClients = [];
+
+    allWindows.forEach(other => {
+        if (other === client) return;
+        if (ignoreClient(other)) return;
+
+        const otherGeometry = isPlasma6 ? other.frameGeometry : other.geometry;
+        if (onSameDesktop(client, other) &&
+            onSameActivity(client, other) &&
+            getWindowOutput(client) === getWindowOutput(other) &&
+            geometriesNearlyEqual(applyGapsGeometry, otherGeometry)) {
+            otherClients.push(other);
+        }
+    });
+
+    debug("applyCascade: found group of", otherClients.length + 1, "windows for slot");
+    applyCascadeGroup(client, otherClients);
+}
+
+function removeCascadeIfNotApplying(client) {
+    if (!client || !client.interstitia_cascade_data) return;
+
+    // Use a timer to check if applyCascade was called recently
+    const timeout = 500;
+    const checkTime = Date.now();
+
+    // In KWin scripts, we can use a simple timer if available, or just check on next event
+    // Since we don't have a reliable generic setTimeout in all KWin versions without some tricks
+    // we'll use a QTimer if possible, or just a timestamp check.
+    // Given the instructions, I'll assume a standard timer or equivalent is expected.
+    // For KWin scripts, we often use a QTimer.
+
+    const timer = new QTimer();
+    timer.interval = timeout;
+    timer.singleShot = true;
+    timer.timeout.connect(() => {
+        if (client.interstitia_cascade_data && (Date.now() - client.interstitia_cascade_data.timestamp >= timeout)) {
+            debug("removeCascadeIfNotApplying: clearing cascade data for", caption(client));
+            delete client.interstitia_cascade_data;
+        }
+        timer.deleteLater();
+    });
+    timer.start();
+}
+
+function applyCascadeGroup(client, otherClients) {
+    const group = [client].concat(otherClients);
+    const hasCascade = group.some(c => c.interstitia_cascade_data && c.interstitia_cascade_data.cascadeState);
+
+    // We need the applyGapsGeometry. If we are called from start/stopCascade, we might need to find it.
+    let applyGapsGeometry = client.interstitia_cascade_data ? client.interstitia_cascade_data.applyGapsGeometry : null;
+
+    if (!applyGapsGeometry) {
+        // Fallback to current frameGeometry if not set
+        applyGapsGeometry = copyGeometry(isPlasma6 ? client.frameGeometry : client.geometry);
+    }
+
+    if (!hasCascade) {
+        debug("applyCascadeGroup: cascade is disabled, resetting geometries for slot");
+        group.forEach(c => {
+            c.frameGeometry = copyGeometry(applyGapsGeometry);
+        });
+        return;
+    }
+
+    const offset = 32;
+    const numWindows = group.length;
+    const newWidth = applyGapsGeometry.width - (offset * (numWindows - 1));
+
+    debug("applyCascadeGroup: cascading", numWindows, "windows with offset", offset);
+
+    // Filter out the primary client for initial positioning
+    const others = group.filter(c => c !== client);
+
+    others.forEach((c, index) => {
+        const newGeo = {
+            x: applyGapsGeometry.x + (index * offset),
+            y: applyGapsGeometry.y + (index * offset),
+            width: newWidth,
+            height: applyGapsGeometry.height
+        };
+        debug("positioning cascaded window:", caption(c), "at", newGeo.x, newGeo.y);
+        c.frameGeometry = newGeo;
+    });
+
+    // Position the primary client last (on top)
+    const clientGeo = {
+        x: applyGapsGeometry.x + (others.length * offset),
+        y: applyGapsGeometry.y + (others.length * offset),
+        width: newWidth,
+        height: applyGapsGeometry.height
+    };
+    debug("positioning primary cascaded window:", caption(client), "on top at", clientGeo.x, clientGeo.y);
+    client.frameGeometry = clientGeo;
+
+    // Raise the primary client
+    workspace.activeWindow = client;
 }
