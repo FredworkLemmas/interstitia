@@ -241,8 +241,8 @@ debug("");
 if (typeof registerShortcut === 'undefined') {
     console.log("interstitia: main.js execution started");
 } else {
-    registerShortcut("interstitia: start cascade", "Interstitia: Start Cascade", "Ctrl+}", startCascade);
-    registerShortcut("interstitia: stop cascade", "Interstitia: Stop Cascade", "Ctrl+{", stopCascade);
+    registerShortcut("interstitia_start_cascade", "Interstitia: Start Cascade", "Ctrl+}", startCascade);
+    registerShortcut("interstitia_stop_cascade", "Interstitia: Stop Cascade", "Ctrl+{", stopCascade);
 }
 
 ///////////////////////
@@ -390,6 +390,7 @@ function selectSameSlotWindows() {
 }
 
 function startCascade() {
+    debug("startCascade shortcut triggered");
     const group = selectSameSlotWindows();
     const activeWindow = workspace.activeWindow || workspace.activeClient;
     if (!activeWindow) {
@@ -411,6 +412,7 @@ function startCascade() {
 }
 
 function stopCascade() {
+    debug("stopCascade shortcut triggered");
     const group = selectSameSlotWindows();
     const activeWindow = workspace.activeWindow || workspace.activeClient;
     if (!activeWindow) {
@@ -1036,7 +1038,6 @@ function removeCascadeIfNotApplying(client) {
             debug("removeCascadeIfNotApplying: clearing cascade data for", caption(client));
             delete client.interstitia_cascade_data;
         }
-        timer.deleteLater();
     });
     timer.start();
 }
