@@ -1087,6 +1087,7 @@ function applyCascadeGroup(client, otherClients) {
     const offset = 32;
     const numWindows = group.length;
     const newWidth = applyGapsGeometry.width - (offset * (numWindows - 1));
+    const newHeight = applyGapsGeometry.height - (offset * (numWindows - 1));
 
     debug("applyCascadeGroup: cascading", numWindows, "windows with offset", offset);
 
@@ -1098,7 +1099,7 @@ function applyCascadeGroup(client, otherClients) {
         x: applyGapsGeometry.x + (others.length * offset),
         y: applyGapsGeometry.y + (others.length * offset),
         width: newWidth,
-        height: applyGapsGeometry.height
+        height: newHeight
     };
     debug("positioning primary cascaded window:", caption(client), "on top at", clientGeo.x, clientGeo.y);
     
@@ -1111,10 +1112,11 @@ function applyCascadeGroup(client, otherClients) {
                 x: applyGapsGeometry.x + (index * offset),
                 y: applyGapsGeometry.y + (index * offset),
                 width: newWidth,
-                height: applyGapsGeometry.height
+                height: newHeight
             };
             debug("positioning cascaded window:", caption(c), "at", newGeo.x, newGeo.y);
             c.frameGeometry = newGeo;
+            workspace.activeWindow = c;
         });
         client.frameGeometry = clientGeo;
     } finally {
