@@ -19,7 +19,6 @@ function startCascade() {
         window.interstitia_cascade_data.timestamp = Date.now();
     });
 
-    const activeWindowGeometry = isPlasma6 ? activeWindow.frameGeometry : activeWindow.geometry;
     applyCascadeGroup(activeWindow, group.filter(w => w !== activeWindow));
 }
 
@@ -43,7 +42,6 @@ function stopCascade() {
         window.interstitia_cascade_data.timestamp = Date.now();
     });
 
-    const activeWindowGeometry = isPlasma6 ? activeWindow.frameGeometry : activeWindow.geometry;
     applyCascadeGroup(activeWindow, group.filter(w => w !== activeWindow));
 }
 

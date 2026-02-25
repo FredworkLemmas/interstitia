@@ -202,7 +202,6 @@ function applyGapsArea(client, clientGeometries) {
  * @param {Object.<string, object>} clientGeometries - Map of windowId to geometry objects.
  */
 function applyGapsWindows(client1, clientGeometries) {
-    let area = getArea(client1);
     let grid = getGrid(client1);
     let win1 = clientGeometries[client1.internalId];
 

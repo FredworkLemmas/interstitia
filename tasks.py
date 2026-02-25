@@ -1,7 +1,7 @@
 from invocate import task
 
 
-@task(name='bundle')
+@task(namespace='dev', name='bundle')
 def bundle(c):
     """Bundle the modular JS files into main.js"""
     files = [
@@ -16,6 +16,10 @@ def bundle(c):
     ]
     c.run(f'cat {" ".join(files)} > contents/code/main.js')
 
+
+@task(namespace='dev', name='clean-repo')
+def clean_repo(c):
+    c.run('rm -f contents/code/main.js')
 
 @task(namespace='dev', name='show-logs')
 def show_logs(c, pty=True):
@@ -39,7 +43,7 @@ def install_tools(c):
     c.run('npm install')
 
 
-@task(namespace='dev', name='lint')
+@task(namespace='dev', name='lint', pre=[clean_repo])
 def lint(c):
     """Run ESLint on source files (excluding main.js)"""
     c.run('npx eslint contents/code/*.js')
