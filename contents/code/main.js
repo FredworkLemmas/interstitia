@@ -392,7 +392,10 @@ function selectSameSlotWindows() {
 function startCascade() {
     const group = selectSameSlotWindows();
     const activeWindow = workspace.activeWindow || workspace.activeClient;
-    if (!activeWindow) return;
+    if (!activeWindow) {
+        debug("startCascade: no active window");
+        return;
+    }
 
     debug("startCascade: enabling cascade state for group of", group.length);
     group.forEach(window => {
@@ -410,8 +413,10 @@ function startCascade() {
 function stopCascade() {
     const group = selectSameSlotWindows();
     const activeWindow = workspace.activeWindow || workspace.activeClient;
-    if (!activeWindow) return;
-
+    if (!activeWindow) {
+        debug("stopCascade: no active window");
+        return;
+    }
     debug("stopCascade: disabling cascade state for group of", group.length);
     group.forEach(window => {
         if (!window.interstitia_cascade_data) {
