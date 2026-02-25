@@ -47,6 +47,15 @@ cd interstitia
 ./install.sh
 ```
 
+### Cascading Windows
+
+Interstitia includes a feature to "cascade" windows that occupy the same tiling slot (same size and position). This is useful when you have multiple windows stacked on top of each other and want to see them all at once without moving them.
+
+*   **Start Cascade (`Ctrl+}`):** Resizes and offsets windows in the current slot by 32 pixels, allowing you to see the title bars and edges of all windows in the stack.
+*   **Stop Cascade (`Ctrl+{`):** Resets all windows in the slot to their original tiled position and size.
+
+The cascade state is automatically cleared if you manually move or resize a window, ensuring the script doesn't interfere with your manual window management.
+
 ## Configuration
 
 *System Settings* > *Window Management* > *KWin Scripts* > *Interstitia* > configuration button.
