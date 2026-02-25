@@ -4,8 +4,8 @@
 
 // compatibility and startup
 const isPlasma6 = (typeof workspace.windowList === 'function');
-console.log("interstitia: app.js execution started, isPlasma6:", isPlasma6);
-console.log("interstitia: app.js execution started at " + new Date().toISOString());
+console.log("interstitia: main.js execution started, isPlasma6:", isPlasma6);
+console.log("interstitia: main.js execution started at " + new Date().toISOString());
 
 // debug flags must be defined before logging/config modules
 var debugMode = true;
