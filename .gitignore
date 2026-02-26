@@ -1,1 +1,4 @@
 .idea
+contents/code/main.js
+*.kwinscript
+node_modules/
