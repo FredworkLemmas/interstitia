@@ -55,9 +55,6 @@ if (typeof global !== "undefined") {
  * apply gap constraints, and handle window cascading.
  */
 class TileableWindow {
-    /** @type {Map<string, TileableWindow>} Cache of instances indexed by window internalId. */
-    static _instances = new Map();
-
     /**
      * Factory method to get or create a TileableWindow instance for a KWin window.
      * Ensures that only one TileableWindow wrapper exists for each unique KWin window.
@@ -786,6 +783,9 @@ class TileableWindow {
         ];
     }
 }
+
+/** @type {Map<string, TileableWindow>} Cache of instances indexed by window internalId. */
+TileableWindow._instances = new Map();
 
 if (typeof global !== "undefined") {
     global.TileableWindow = TileableWindow;

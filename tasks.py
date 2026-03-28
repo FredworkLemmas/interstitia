@@ -1,6 +1,7 @@
 from invocate import task
 
 
+
 @task(namespace='dev', name='bundle')
 def bundle(c):
     """Bundle the modular JS files into main.js"""
