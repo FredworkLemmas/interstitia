@@ -662,57 +662,63 @@ class TileableWindow {
      * Handles moves, resizes, fullscreen toggles, maximize/minimize, etc.
      */
     setupGeometrySignals() {
-        this.window.moveResizedChanged.connect(() => {
-            debug("move resized changed", this.getCaption());
-            this.removeCascadeIfNotApplying();
-            this.applyGaps();
-        });
-        this.window.frameGeometryChanged.connect(() => {
-            debug("frame geometry changed", this.getCaption());
-            this.removeCascadeIfNotApplying();
-            this.applyGaps();
-        });
-        this.window.interactiveMoveResizeFinished.connect(() => {
-            debug("finish user moved resized", this.getCaption());
-            workspace.slotWindowClose.connect(() => {}); 
-            this.removeCascadeIfNotApplying();
-            this.applyGaps();
-        });
-        this.window.fullScreenChanged.connect(() => {
-            debug("fullscreen changed", this.getCaption());
-            this.removeCascadeIfNotApplying();
-            this.applyGaps();
-        });
-        this.window.maximizedChanged.connect(() => {
-            debug("maximized changed", this.getCaption());
-            this.removeCascadeIfNotApplying();
-            this.applyGaps();
-        });
-        this.window.minimizedChanged.connect(() => {
-            debug("unminimized", this.getCaption());
-            this.removeCascadeIfNotApplying();
-            this.applyGaps();
-        });
-        this.window.quickTileModeChanged.connect(() => {
-            debug("tile mode changed", this.getCaption());
-            debug("triggering cascade check for", this.getCaption(), "due to tile change");
-            this.applyGaps(true);
-        });
-        this.window.tileChanged.connect(() => {
-            debug("tile changed", this.getCaption());
-            debug("triggering cascade check for", this.getCaption(), "due to tile change");
-            this.applyGaps(true);
-        });
-        this.window.desktopsChanged.connect(() => {
-            debug("desktops changed", this.getCaption());
-            this.removeCascadeIfNotApplying();
-            this.applyGaps();
-        });
-        this.window.activitiesChanged.connect(() => {
-            debug("activities changed", this.getCaption());
-            this.removeCascadeIfNotApplying();
-            this.applyGaps();
-        });
+        /**
+         * Helper to connect a window signal to a debug message and applyGaps.
+         */
+        const trigger = (signal, message, customAction = null) => {
+            if (signal === undefined) return;
+            signal.connect(() => {
+                debug(message, this.getCaption());
+                if (customAction) {
+                    customAction();
+                } else {
+                    this.removeCascadeIfNotApplying();
+                    this.applyGaps();
+                }
+            });
+        };
+
+        this.getTriggers().forEach(([signal, message, customAction]) => trigger(signal, message, customAction));
+    }
+
+    /**
+     * Expose triggers for testing or external inspection.
+     */
+    getTriggers() {
+        return [
+            [this.window.moveResizedChanged, "move resized changed"],
+            [this.window.frameGeometryChanged, "frame geometry changed"],
+            [
+                this.window.interactiveMoveResizeFinished,
+                "finish user moved resized",
+                () => {
+                    workspace.slotWindowClose.connect(() => {});
+                    this.removeCascadeIfNotApplying();
+                    this.applyGaps();
+                },
+            ],
+            [this.window.fullScreenChanged, "fullscreen changed"],
+            [this.window.maximizedChanged, "maximized changed"],
+            [this.window.minimizedChanged, "unminimized"],
+            [
+                this.window.quickTileModeChanged,
+                "tile mode changed",
+                () => {
+                    debug("triggering cascade check for", this.getCaption(), "due to tile change");
+                    this.applyGaps(true);
+                },
+            ],
+            [
+                this.window.tileChanged,
+                "tile changed",
+                () => {
+                    debug("triggering cascade check for", this.getCaption(), "due to tile change");
+                    this.applyGaps(true);
+                },
+            ],
+            [this.window.desktopsChanged, "desktops changed"],
+            [this.window.activitiesChanged, "activities changed"],
+        ];
     }
 }
 

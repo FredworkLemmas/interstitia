@@ -4,9 +4,11 @@ const path = require("path");
 // Mock global environment if needed (though 040_windowing.js is mostly pure functions)
 global.debug = jest.fn();
 
-// Load the file
-const code = fs.readFileSync(path.join(__dirname, "..", "contents/code/040_windowing.js"), "utf8");
-eval.call(global, code);
+// Load the files
+const geometryCode = fs.readFileSync(path.join(__dirname, "..", "contents/code/038_geometry.js"), "utf8");
+const windowingCode = fs.readFileSync(path.join(__dirname, "..", "contents/code/040_windowing.js"), "utf8");
+eval.call(global, geometryCode);
+eval.call(global, windowingCode);
 
 describe("TileableWindowGeometry", () => {
     const rect1 = { x: 10, y: 20, width: 100, height: 200 };

@@ -26,6 +26,7 @@ global.config = { includeMaximized: false, excludeMode: true, includeMode: false
 
 // Load and evaluate the files in order (similar to bundle task)
 const filesToLoad = [
+    "contents/code/038_geometry.js",
     "contents/code/040_windowing.js",
     "contents/code/035_tileable_window.js",
 ];
@@ -155,16 +156,47 @@ describe("TileableWindow Class", () => {
     });
 
     /**
-     * This test demonstrates the initialize() method:
-     * - It verifies that initialize connects all necessary signals for a window.
+     * This test demonstrates the initialize() method and trigger connection:
+     * - It verifies that initialize connects all signals from getTriggers().
      */
-    test("initialize connects window signals", () => {
+    test("initialize connects all geometry triggers", () => {
         const tw = TileableWindow.get(mockWindow);
+        const triggers = tw.getTriggers();
+        
         tw.initialize();
         
-        expect(mockWindow.moveResizedChanged.connect).toHaveBeenCalled();
-        expect(mockWindow.frameGeometryChanged.connect).toHaveBeenCalled();
-        expect(mockWindow.maximizedChanged.connect).toHaveBeenCalled();
-        expect(mockWindow.interactiveMoveResizeStarted.connect).toHaveBeenCalled();
+        triggers.forEach(([signal]) => {
+            if (signal) {
+                expect(signal.connect).toHaveBeenCalled();
+            }
+        });
+    });
+
+    /**
+     * This test verifies that triggers call the expected actions.
+     */
+    test("triggers invoke expected actions", () => {
+        const tw = TileableWindow.get(mockWindow);
+        const triggers = tw.getTriggers();
+        tw.applyGaps = jest.fn();
+        tw.removeCascadeIfNotApplying = jest.fn();
+        
+        tw.setupGeometrySignals();
+        
+        // Test a standard trigger
+        const moveResizedTrigger = triggers.find(t => t[1] === "move resized changed");
+        const moveResizedConn = moveResizedTrigger[0].connect.mock.calls[0][0];
+        moveResizedConn();
+        expect(global.debug).toHaveBeenCalledWith("move resized changed", tw.getCaption());
+        expect(tw.applyGaps).toHaveBeenCalled();
+        expect(tw.removeCascadeIfNotApplying).toHaveBeenCalled();
+        
+        // Test a custom action trigger (e.g., quickTileModeChanged)
+        const tileModeTrigger = triggers.find(t => t[1] === "tile mode changed");
+        const tileModeConn = tileModeTrigger[0].connect.mock.calls[0][0];
+        tileModeConn();
+        expect(global.debug).toHaveBeenCalledWith("tile mode changed", tw.getCaption());
+        expect(global.debug).toHaveBeenCalledWith("triggering cascade check for", tw.getCaption(), "due to tile change");
+        expect(tw.applyGaps).toHaveBeenCalledWith(true);
     });
 });

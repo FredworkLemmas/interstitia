@@ -8,15 +8,17 @@ This document details the design, architecture, and implementation of Interstiti
 Since KWin scripts are typically single-file JavaScript execution environments without standard `import`/`export` support, Interstitia uses a custom bundling process.
 - **Source Files**: Logical units are separated into multiple files in `contents/code/`.
 - **Bundler**: A Python-based task runner (`tasks.py` using `invoke`) concatenates these files into a single `contents/code/main.js`.
-- **Order Matters**: The concatenation order is critical because dependencies are implicit (global functions/variables). The order defined in `tasks.py` is:
-    1. `01_init.js` (Global state & entry)
-    2. `02_logging.js` (Debug utilities)
-    3. `03_config.js` (Configuration loading)
-    4. `04_windowing.js` (Geometry & Window utilities)
-    5. `05_gaps.js` (Core gap logic)
-    6. `06_cascade.js` (Cascading logic)
-    7. `07_reaction.js` (Event handlers)
-    8. `08_main_loop.js` (Script initialization)
+- **Order Matters**: The concatenation order is critical because dependencies are implicit (global functions/variables). The order defined in `tasks.py` (alphabetical by numeric prefix) is:
+    1. `010_init.js` (Global state & entry)
+    2. `020_logging.js` (Debug utilities)
+    3. `030_config.js` (Configuration loading)
+    4. `035_tileable_window.js` (Window management class)
+    5. `038_geometry.js` (TileableWindowGeometry class)
+    6. `040_windowing.js` (Geometry & Window utilities)
+    7. `050_gaps.js` (Core gap logic)
+    8. `060_cascade.js` (Cascading logic)
+    9. `070_reaction.js` (Event handlers)
+    10. `080_main_loop.js` (Script initialization)
 
 ### State Management
 - **Global Flags**: Uses `block` to prevent recursive event loops when the script itself modifies window geometry.
@@ -27,29 +29,40 @@ Since KWin scripts are typically single-file JavaScript execution environments w
 
 ## Sources
 
-### `01_init.js`
+### `010_init.js`
 - **Purpose**: Establishes the initial environment and global state.
 - **Key Logic**: Detects Plasma version (Plasma 6 vs 5) and initializes global control flags like `block` and mouse tracking variables.
 
-### `02_logging.js`
+### `020_logging.js`
 - **Purpose**: Provides throttled and conditional logging.
 - **Key Logic**: Implements `debug()` and `fullDebug()` which respect `debugMode` and `fullDebugMode` flags.
 
-### `03_config.js`
+### `030_config.js`
 - **Purpose**: Bridges KWin's configuration system with the script's internal logic.
 - **Key Logic**: 
     - Implements a robust `readConfigValue` function that attempts to find settings across multiple possible KWin API locations and groups (`Script-interstitia`, `General`, etc.), ensuring compatibility across Plasma versions.
     - Maps `KConfig` values to a global `config` object. 
     - Handles blacklisting/whitelisting of window classes via `config.applications`.
 
-### `04_windowing.js`
+### `035_tileable_window.js`
+- **Purpose**: Defines the `TileableWindow` class which wraps `KWin.Window`.
+- **Key Logic**:
+    - Implements the Factory pattern via `TileableWindow.get(window)`.
+    - Manages window-specific logic like `shouldIgnore`, `getOutput`, and signal connections.
+    - `setupGeometrySignals()` provides a declarative way to connect geometry-related signals.
+
+### `038_geometry.js`
+- **Purpose**: Defines the `TileableWindowGeometry` class.
+- **Key Logic**: Handles geometry operations (copy, equality, approximate equality).
+
+### `040_windowing.js`
 - **Purpose**: Abstracted utility functions for window properties and geometry.
 - **Key Logic**: 
     - Normalizes API differences between Plasma 5 and 6 (e.g., `frameGeometry` vs `geometry`).
-    - Includes `TileableWindowGeometry` class to handle geometry operations (copy, equality, approximate equality).
     - Implements relationship checks like `onSameDesktop`, `isOnSameActivity`, and `onSameOutput`.
+    - Implements `selectSameSlotWindows()` using the `TileableWindow` and `TileableWindowGeometry` classes.
 
-### `05_gaps.js`
+### `050_gaps.js`
 - **Purpose**: The engine for calculating and applying window gaps.
 - **Key Logic**: 
     - `applyGaps()`: The main entry point for a single window. It implements a 750ms "cooldown" for mouse drags to prevent excessive calculations during resizing.
@@ -57,21 +70,21 @@ Since KWin scripts are typically single-file JavaScript execution environments w
     - `applyGapsWindows()`: Iterates through all windows to find neighbors. When two windows are adjacent, it splits the `gap.mid` space between them, adjusting both windows' geometries simultaneously.
     - Uses a `clientGeometries` map (passed to sub-functions) to perform batch updates. Only after all calculations are done are the actual `window.frameGeometry` properties updated, which minimizes flickering.
 
-### `06_cascade.js`
+### `060_cascade.js`
 - **Purpose**: Implements the window cascading feature (Ctrl+} / Ctrl+{).
 - **Key Logic**: 
     - Identifies "slots" (windows with nearly identical geometry).
     - `applyCascadeGroup()`: Iteratively offsets windows in a stack so title bars are visible.
     - Stores `cascadeState` in window metadata to persist across gapping updates.
 
-### `07_reaction.js`
+### `070_reaction.js`
 - **Purpose**: Connects KWin events to script actions.
 - **Key Logic**: 
     - `onAdded()`: Initializes new windows.
     - `onRegeometrized()`: Watches for `frameGeometryChanged`, `maximizedChanged`, etc.
     - `onRelayouted()`: Responds to workspace-wide changes like desktop switching or screen count changes.
 
-### `08_main_loop.js`
+### `080_main_loop.js`
 - **Purpose**: Orchestrates the startup sequence.
 - **Key Logic**: Loads config, registers global shortcuts, and performs the initial pass on existing windows.
 
