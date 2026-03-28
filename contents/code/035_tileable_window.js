@@ -1,20 +1,35 @@
 /**
  * WindowCoordinator Class (Singleton)
  * Manages shared global state previously held in global variables.
+ * It coordinates behavior across all TileableWindow instances, such as
+ * blocking updates during manual operations or tracking mouse-driven resizing.
  */
 class WindowCoordinator {
+    /**
+     * Initializes the singleton instance if it doesn't exist.
+     * Sets default flags for update blocking and resize tracking.
+     */
     constructor() {
         if (WindowCoordinator.instance) {
             return WindowCoordinator.instance;
         }
+        /** @type {boolean} Prevents recursive or unwanted gap applications. */
         this.block = false;
+        /** @type {boolean} Tracks if the user is currently dragging or resizing a window. */
         this.mouseDragOrResizeInProgress = false;
+        /** @type {object|null} Stores the geometry at the start of a drag/resize operation. */
         this.mouseDragOrResizeStartingGeometry = null;
+        /** @type {number|null} Timestamp when the drag/resize operation started. */
         this.mouseDragOrResizeStartTime = null;
+        /** @type {number|null} Number of updates received during the current drag/resize. */
         this.mouseDragOrResizeNumUpdates = null;
         WindowCoordinator.instance = this;
     }
 
+    /**
+     * Returns the singleton instance of WindowCoordinator.
+     * @returns {WindowCoordinator} The singleton instance.
+     */
     static getInstance() {
         if (!WindowCoordinator.instance) {
             new WindowCoordinator();
@@ -36,14 +51,18 @@ if (typeof global !== "undefined") {
 /**
  * TileableWindow Class
  * Encapsulates all window-specific logic for tiling and gapping.
+ * This class provides methods to calculate work areas, check for overlaps,
+ * apply gap constraints, and handle window cascading.
  */
 class TileableWindow {
+    /** @type {Map<string, TileableWindow>} Cache of instances indexed by window internalId. */
     static _instances = new Map();
 
     /**
      * Factory method to get or create a TileableWindow instance for a KWin window.
+     * Ensures that only one TileableWindow wrapper exists for each unique KWin window.
      * @param {KWin.Window} window - The underlying KWin window object.
-     * @returns {TileableWindow}
+     * @returns {TileableWindow|null} The cached or new TileableWindow instance.
      */
     static get(window) {
         if (!window) return null;
@@ -54,29 +73,53 @@ class TileableWindow {
         return TileableWindow._instances.get(id);
     }
 
+    /**
+     * @param {KWin.Window} window - The underlying KWin window object.
+     */
     constructor(window) {
+        /** @type {KWin.Window} The wrapped KWin window object. */
         this.window = window;
     }
 
     // --- Utilities (from 04_windowing.js) ---
 
+    /**
+     * Detects the output (screen) the window is currently on.
+     * Supports both Plasma 5 (screen) and Plasma 6 (output) properties.
+     * @returns {object|number|null} The output identifier.
+     */
     getOutput() {
         if (this.window.output !== undefined) return this.window.output;
         if (this.window.screen !== undefined) return this.window.screen;
         return null;
     }
 
+    /**
+     * Gets the list of desktops the window is currently assigned to.
+     * @returns {number[]} Array of desktop identifiers.
+     */
     getDesktops() {
         if (this.window.desktops !== undefined) return this.window.desktops;
         if (this.window.desktop !== undefined) return [this.window.desktop];
         return [];
     }
 
+    /**
+     * Checks if this window is on the same output as another.
+     * @param {TileableWindow|KWin.Window} other - The other window to compare.
+     * @returns {boolean} True if they share the same output.
+     */
     isOnSameOutput(other) {
         const otherWin = other instanceof TileableWindow ? other : TileableWindow.get(other);
         return this.getOutput() == otherWin.getOutput();
     }
 
+    /**
+     * Checks if this window is on the same desktop as another.
+     * Accounts for windows that are present on all desktops.
+     * @param {TileableWindow|KWin.Window} other - The other window to compare.
+     * @returns {boolean} True if they share at least one desktop or either is on all desktops.
+     */
     isOnSameDesktop(other) {
         const otherWin = other instanceof TileableWindow ? other : TileableWindow.get(other);
         if (this.window.onAllDesktops || otherWin.window.onAllDesktops) return true;
@@ -90,6 +133,11 @@ class TileableWindow {
         return false;
     }
 
+    /**
+     * Checks if this window is on the same activity as another.
+     * @param {TileableWindow|KWin.Window} other - The other window to compare.
+     * @returns {boolean} True if they share at least one activity.
+     */
     isOnSameActivity(other) {
         const otherWin = other instanceof TileableWindow ? other : TileableWindow.get(other);
         const activities1 = this.window.activities;
@@ -103,10 +151,20 @@ class TileableWindow {
         return false;
     }
 
+    /**
+     * Returns the work area (excluding panels) available for this window's output.
+     * @returns {QRect} The available maximize area.
+     */
     getWorkArea() {
         return workspace.clientArea(KWin.MaximizeArea, this.window);
     }
 
+    /**
+     * Calculates the "anchors" or grid positions for the window edges based on
+     * configuration (gaps) and workspace geometry. These anchors define where
+     * window edges should snap to (e.g., full left, half screen, etc.).
+     * @returns {object} Nested object with left, right, top, and bottom anchor definitions.
+     */
     getGridAnchors() {
         let area = this.getWorkArea();
         let unmaximized = !this.isMaximized();
@@ -186,6 +244,12 @@ class TileableWindow {
         };
     }
 
+    /**
+     * Determines if the window should be ignored by the tiling logic.
+     * Reasons for ignoring include: being a special window (dock, splash), being
+     * fullscreen, being maximized (depending on config), or matching the exclude/include list.
+     * @returns {boolean} True if the window should be ignored.
+     */
     shouldIgnore() {
         return (
             !this.window ||
@@ -198,6 +262,11 @@ class TileableWindow {
         );
     }
 
+    /**
+     * Determines if another window should be ignored when calculating gaps relative to this one.
+     * @param {TileableWindow|KWin.Window} other - The other window to check.
+     * @returns {boolean} True if the other window should be ignored.
+     */
     shouldIgnoreOther(other) {
         const otherWin = other instanceof TileableWindow ? other : TileableWindow.get(other);
         return (
@@ -209,16 +278,30 @@ class TileableWindow {
         );
     }
 
+    /**
+     * Gets the window's caption (title).
+     * @returns {string|null} The caption or null if window is invalid.
+     */
     getCaption() {
         return this.window ? this.window.caption : null;
     }
 
+    /**
+     * Checks if the window is currently maximized by comparing its geometry to the work area.
+     * @returns {boolean} True if the window is maximized.
+     */
     isMaximized() {
         return geometriesEqual(this.window.frameGeometry, workspace.clientArea(KWin.MaximizeArea, this.window));
     }
 
     // --- Gap Logic (from 05_gaps.js) ---
 
+    /**
+     * Main entry point for applying gaps to the window.
+     * Orchestrates the calculation and application of gaps against both screen edges and other windows.
+     * Includes logic to debounce updates during active mouse resizing.
+     * @param {boolean} [updateCascade=false] - Whether to trigger a cascade update after applying gaps.
+     */
     applyGaps(updateCascade = false) {
         if (coordinator.block || !this.window || this.shouldIgnore()) return;
 
@@ -305,9 +388,18 @@ class TileableWindow {
         debug("");
     }
 
+    /**
+     * Applies gaps relative to the workspace boundaries (screen edges and panels).
+     * Adjusts the geometry in the provided clientGeometries map.
+     * @param {Object.<string, object>} clientGeometries - Map of window IDs to their draft geometries.
+     */
     applyGapsArea(clientGeometries) {
         let grid = this.getGridAnchors();
         let geo = clientGeometries[this.window.internalId];
+
+        // Snapping logic for each edge (left, right, top, bottom)
+        // Checks if the window edge is "near" a standard anchor point (like screen edge or half-point)
+        // and snaps it to the gapped version of that anchor.
 
         if (nearArea(geo.left, grid.left.fullLeft.closed, grid.left.fullLeft.gapped, gap.left))
             geo.left = grid.left.fullLeft.gapped;
@@ -345,12 +437,18 @@ class TileableWindow {
         if (nearArea(geo.bottom, grid.bottom.quarterTop.closed, grid.bottom.quarterTop.gapped, gap.mid))
             geo.bottom = grid.bottom.quarterTop.gapped;
 
+        // Reconstruct basic geometry from edges
         geo.x = geo.left;
         geo.y = geo.top;
         geo.width = geo.right - geo.left;
         geo.height = geo.bottom - geo.top;
     }
 
+    /**
+     * Applies gaps between this window and other windows on the same output/desktop.
+     * Iterates through all visible windows to find adjacent ones and adjust boundaries.
+     * @param {Object.<string, object>} clientGeometries - Map of window IDs to their draft geometries.
+     */
     applyGapsWindows(clientGeometries) {
         let geo1 = clientGeometries[this.window.internalId];
 
@@ -360,6 +458,7 @@ class TileableWindow {
 
             let geo2 = clientGeometries[c2.internalId];
 
+            // Horizontal gap check (side-by-side windows)
             if (overlapVer(geo1, geo2)) {
                 if (nearWindow(geo1.left, geo2.right, gap.mid)) {
                     let diff = gap.mid - (geo1.left - geo2.right);
@@ -376,6 +475,7 @@ class TileableWindow {
                     geo2.width -= diff / 2;
                 }
             }
+            // Vertical gap check (stacked windows)
             if (overlapHor(geo1, geo2)) {
                 if (nearWindow(geo1.top, geo2.bottom, gap.mid)) {
                     let diff = gap.mid - (geo1.top - geo2.bottom);
@@ -393,12 +493,18 @@ class TileableWindow {
                 }
             }
         }
+        // Sync coordinates
         geo1.x = geo1.left;
         geo1.y = geo1.top;
     }
 
     // --- Cascade Logic (from 06_cascade.js) ---
 
+    /**
+     * Initiates a cascade for this window and any windows occupying the same slot.
+     * Captures current state (desktops, output, geometry) before starting.
+     * @param {object} applyGapsGeometry - The target geometry for the cascade group base.
+     */
     applyCascade(applyGapsGeometry) {
         if (!this.window.interstitia_cascade_data) {
             this.window.interstitia_cascade_data = {};
@@ -436,6 +542,11 @@ class TileableWindow {
         this.applyCascadeGroup(otherClients);
     }
 
+    /**
+     * Cleans up cascade-related metadata if it's no longer needed.
+     * Uses a short delay to ensure that rapid state changes don't prematurely
+     * clear the data while it might still be used by concurrent logic.
+     */
     removeCascadeIfNotApplying() {
         if (!this.window || !this.window.interstitia_cascade_data) return;
 
@@ -456,6 +567,12 @@ class TileableWindow {
         timer.start();
     }
 
+    /**
+     * Applies the actual cascade layout to a group of windows.
+     * Calculated an offset-based layout where each window is shifted slightly
+     * from the previous one, and the current window is placed on top.
+     * @param {KWin.Window[]} otherClients - The other windows in the cascade group.
+     */
     applyCascadeGroup(otherClients) {
         const group = [this.window].concat(otherClients);
         const hasCascade = group.some((c) => c.interstitia_cascade_data && c.interstitia_cascade_data.cascadeState);
@@ -514,6 +631,9 @@ class TileableWindow {
 
     // --- Reaction/Events (from 07_reaction.js) ---
 
+    /**
+     * Initializes the window wrapper: applies initial gaps and sets up all event listeners.
+     */
     initialize() {
         debug("added", this.getCaption());
         this.applyGaps();
@@ -521,6 +641,10 @@ class TileableWindow {
         this.setupMouseDragTracking();
     }
 
+    /**
+     * Connects signals related to user-interactive moving and resizing.
+     * Helps the WindowCoordinator track when to temporarily disable tiling adjustments.
+     */
     setupMouseDragTracking() {
         this.window.interactiveMoveResizeStarted.connect(() => {
             debug("interactive move/resize started (mouse drag detected)", this.getCaption());
@@ -533,6 +657,10 @@ class TileableWindow {
         });
     }
 
+    /**
+     * Connects all geometry-related signals to trigger gap reapplications.
+     * Handles moves, resizes, fullscreen toggles, maximize/minimize, etc.
+     */
     setupGeometrySignals() {
         this.window.moveResizedChanged.connect(() => {
             debug("move resized changed", this.getCaption());
