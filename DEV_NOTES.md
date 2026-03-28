@@ -12,8 +12,8 @@ Since KWin scripts are typically single-file JavaScript execution environments w
     1. `010_init.js` (Global state & entry)
     2. `020_logging.js` (Debug utilities)
     3. `030_config.js` (Configuration loading)
-    4. `035_tileable_window.js` (Window management class)
-    5. `038_geometry.js` (TileableWindowGeometry class)
+    4. `034_geometry.js` (TileableWindowGeometry class)
+    5. `035_tileable_window.js` (Window management class)
     6. `070_reaction.js` (Event handlers)
     7. `080_main_loop.js` (Script initialization)
 
@@ -41,16 +41,16 @@ Since KWin scripts are typically single-file JavaScript execution environments w
     - Maps `KConfig` values to a global `config` object. 
     - Handles blacklisting/whitelisting of window classes via `config.applications`.
 
+### `034_geometry.js`
+- **Purpose**: Defines the `TileableWindowGeometry` class.
+- **Key Logic**: Handles geometry operations (copy, equality, approximate equality).
+
 ### `035_tileable_window.js`
 - **Purpose**: Defines the `TileableWindow` class which wraps `KWin.Window`.
 - **Key Logic**:
     - Implements the Factory pattern via `TileableWindow.get(window)`.
     - Manages window-specific logic like `shouldIgnore`, `getOutput`, and signal connections.
     - `setupGeometrySignals()` provides a declarative way to connect geometry-related signals.
-
-### `038_geometry.js`
-- **Purpose**: Defines the `TileableWindowGeometry` class.
-- **Key Logic**: Handles geometry operations (copy, equality, approximate equality).
 
 ### `070_reaction.js`
 - **Purpose**: Connects KWin events to script actions.

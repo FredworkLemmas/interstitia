@@ -5,7 +5,7 @@ const path = require("path");
 global.debug = jest.fn();
 
 // Load the files
-const geometryCode = fs.readFileSync(path.join(__dirname, "..", "contents/code/038_geometry.js"), "utf8");
+const geometryCode = fs.readFileSync(path.join(__dirname, "..", "contents/code/034_geometry.js"), "utf8");
 eval.call(global, geometryCode);
 
 describe("TileableWindowGeometry", () => {
