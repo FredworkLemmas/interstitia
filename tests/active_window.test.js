@@ -81,7 +81,7 @@ describe("ActiveWindow Class", () => {
         expect(sameSlot[1].window.internalId).toBe("win-other");
     });
 
-    test("startCascade enables cascade state for group", () => {
+    test("startCascade creates a cascade group and assigns keys to all members", () => {
         const otherWindow = {
             internalId: "win-other",
             caption: "Other Window",
@@ -90,20 +90,18 @@ describe("ActiveWindow Class", () => {
             activities: ["act-1"],
             frameGeometry: { x: 100, y: 100, width: 800, height: 600 },
             normalWindow: true,
-            interstitia_cascade_data: {},
         };
         workspace.windowList.mockReturnValue([mockWindow, otherWindow]);
-        
+
         const active = ActiveWindow.getActive();
-        active.applyCascadeGroup = jest.fn();
         active.startCascade();
-        
-        expect(mockWindow.interstitia_cascade_data.cascadeState).toBe(true);
-        expect(otherWindow.interstitia_cascade_data.cascadeState).toBe(true);
-        expect(active.applyCascadeGroup).toHaveBeenCalledWith([otherWindow]);
+
+        expect(mockWindow.interstitia_cascadeSlotKey).toBeDefined();
+        expect(otherWindow.interstitia_cascadeSlotKey).toBeDefined();
+        expect(mockWindow.interstitia_cascadeSlotKey).toBe(otherWindow.interstitia_cascadeSlotKey);
     });
 
-    test("stopCascade disables cascade state for group", () => {
+    test("stopCascade dissolves cascade group and removes keys from all members", () => {
         const otherWindow = {
             internalId: "win-other",
             caption: "Other Window",
@@ -112,16 +110,18 @@ describe("ActiveWindow Class", () => {
             activities: ["act-1"],
             frameGeometry: { x: 100, y: 100, width: 800, height: 600 },
             normalWindow: true,
-            interstitia_cascade_data: { cascadeState: true },
         };
         workspace.windowList.mockReturnValue([mockWindow, otherWindow]);
-        
+
+        // First create the cascade group
         const active = ActiveWindow.getActive();
-        active.applyCascadeGroup = jest.fn();
+        active.startCascade();
+        expect(mockWindow.interstitia_cascadeSlotKey).toBeDefined();
+
+        // Now stop it
         active.stopCascade();
-        
-        expect(mockWindow.interstitia_cascade_data.cascadeState).toBe(false);
-        expect(otherWindow.interstitia_cascade_data.cascadeState).toBe(false);
-        expect(active.applyCascadeGroup).toHaveBeenCalledWith([otherWindow]);
+
+        expect(mockWindow.interstitia_cascadeSlotKey).toBeUndefined();
+        expect(otherWindow.interstitia_cascadeSlotKey).toBeUndefined();
     });
 });
