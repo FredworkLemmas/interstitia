@@ -2,48 +2,34 @@
  * Connect workspace-wide relayout triggers to re-apply gaps.
  */
 function onRelayouted() {
-    workspace.currentDesktopChanged.connect(() => {
-        debug("current desktop changed");
-        applyGapsAll();
-    });
-    workspace.desktopLayoutChanged.connect(() => {
-        debug("desktop layout changed");
-        applyGapsAll();
-    });
-    workspace.desktopsChanged.connect(() => {
-        debug("desktops changed");
-        applyGapsAll();
-    });
-    workspace.screensChanged.connect(() => {
-        debug("screens changed");
-        applyGapsAll();
-    });
-    workspace.currentActivityChanged.connect(() => {
-        debug("current activity changed");
-        applyGapsAll();
-    });
-    workspace.activitiesChanged.connect(() => {
-        debug("activities changed");
-        applyGapsAll();
-    });
-    workspace.virtualScreenSizeChanged.connect(() => {
-        debug("virtual screen size changed");
-        applyGapsAll();
-    });
-    workspace.virtualScreenGeometryChanged.connect(() => {
-        debug("virtual screen geometry changed");
-        applyGapsAll();
-    });
-    workspace.windowAdded.connect((client) => {
-        if (client.dock) {
-            debug("dock added");
-            applyGapsAll();
-        }
-    });
-    if (workspace.outputOrderChanged !== undefined) {
-        workspace.outputOrderChanged.connect(() => {
-            debug("output order changed");
-            applyGapsAll();
+    /**
+     * Helper to connect a signal to a debug message and applyGapsAll.
+     */
+    const trigger = (signal, message, condition = () => true) => {
+        if (signal === undefined) return;
+        signal.connect((...args) => {
+            if (condition(...args)) {
+                debug(message);
+                applyGapsAll();
+            }
         });
-    }
+    };
+
+    onRelayouted.getTriggers().forEach(([signal, message, condition]) => trigger(signal, message, condition));
 }
+
+/**
+ * Expose triggers for testing or external inspection.
+ */
+onRelayouted.getTriggers = () => [
+    [workspace.currentDesktopChanged, "current desktop changed"],
+    [workspace.desktopLayoutChanged, "desktop layout changed"],
+    [workspace.desktopsChanged, "desktops changed"],
+    [workspace.screensChanged, "screens changed"],
+    [workspace.currentActivityChanged, "current activity changed"],
+    [workspace.activitiesChanged, "activities changed"],
+    [workspace.virtualScreenSizeChanged, "virtual screen size changed"],
+    [workspace.virtualScreenGeometryChanged, "virtual screen geometry changed"],
+    [workspace.outputOrderChanged, "output order changed"],
+    [workspace.windowAdded, "dock added", (client) => client.dock],
+];
