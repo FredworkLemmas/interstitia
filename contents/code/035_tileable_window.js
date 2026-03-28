@@ -17,12 +17,6 @@ class WindowCoordinator {
         this.block = false;
         /** @type {boolean} Tracks if the user is currently dragging or resizing a window. */
         this.mouseDragOrResizeInProgress = false;
-        /** @type {object|null} Stores the geometry at the start of a drag/resize operation. */
-        this.mouseDragOrResizeStartingGeometry = null;
-        /** @type {number|null} Timestamp when the drag/resize operation started. */
-        this.mouseDragOrResizeStartTime = null;
-        /** @type {number|null} Number of updates received during the current drag/resize. */
-        this.mouseDragOrResizeNumUpdates = null;
         WindowCoordinator.instance = this;
     }
 
@@ -373,48 +367,8 @@ class TileableWindow {
         }
 
         if (coordinator.mouseDragOrResizeInProgress) {
-            debug(
-                "screen:",
-                this.getOutput(),
-                "x:",
-                this.window.x,
-                "y:",
-                this.window.y,
-                "width:",
-                this.window.width,
-                "height:",
-                this.window.height,
-            );
-            if (!coordinator.mouseDragOrResizeStartingGeometry) {
-                coordinator.mouseDragOrResizeStartTime = Date.now();
-                coordinator.mouseDragOrResizeNumUpdates = 1;
-                coordinator.mouseDragOrResizeStartingGeometry = {
-                    x: this.window.x,
-                    y: this.window.y,
-                    w: this.window.width,
-                    h: this.window.height,
-                };
-            }
-
-            debug(
-                "apply gaps",
-                this.getCaption(),
-                config.includeMaximized,
-                this.isMaximized(),
-                coordinator.block,
-                "mouseDrag:",
-                coordinator.mouseDragOrResizeInProgress,
-            );
-
-            if (Date.now() - coordinator.mouseDragOrResizeStartTime < 750) return;
-
-            if (
-                this.window.width == coordinator.mouseDragOrResizeStartingGeometry.w &&
-                this.window.height == coordinator.mouseDragOrResizeStartingGeometry.h
-            )
-                return;
-        } else if (coordinator.mouseDragOrResizeStartingGeometry) {
-            coordinator.mouseDragOrResizeStartingGeometry = null;
+            debug("applyGaps: skipping, drag/resize in progress", this.getCaption());
+            return;
         }
 
         coordinator.block = true;
