@@ -665,11 +665,31 @@ class TileableWindow {
         this.window.interactiveMoveResizeStarted.connect(() => {
             debug("interactive move/resize started (mouse drag detected)", this.getCaption());
             coordinator.mouseDragOrResizeInProgress = true;
+            // Record geometry and tile state before Plasma restores the floating size.
+            this._dragStartGeometry = new TileableWindowGeometry(this.window.frameGeometry);
+            this._dragStartWasTiled = this.window.quickTileMode !== 0;
+            debug("drag start: wasTiled", this._dragStartWasTiled, "geo", this._dragStartGeometry.toString());
         });
 
         this.window.interactiveMoveResizeFinished.connect(() => {
             debug("interactive move/resize finished (mouse drag ended)", this.getCaption());
             coordinator.mouseDragOrResizeInProgress = false;
+            // If the window was tiled before the drag, restore its tiled dimensions
+            // at the drop position before applying gaps.
+            if (this._dragStartWasTiled && this._dragStartGeometry) {
+                const dropGeo = this.window.frameGeometry;
+                debug("drag end: restoring tiled dimensions", this._dragStartGeometry.width, "x", this._dragStartGeometry.height, "at", dropGeo.x, dropGeo.y);
+                this.window.frameGeometry = {
+                    x: dropGeo.x,
+                    y: dropGeo.y,
+                    width: this._dragStartGeometry.width,
+                    height: this._dragStartGeometry.height,
+                };
+            }
+            this._dragStartGeometry = null;
+            this._dragStartWasTiled = false;
+            this.removeCascadeIfNotApplying();
+            this.applyGaps();
         });
     }
 
@@ -704,15 +724,6 @@ class TileableWindow {
         return [
             [this.window.moveResizedChanged, "move resized changed"],
             [this.window.frameGeometryChanged, "frame geometry changed"],
-            [
-                this.window.interactiveMoveResizeFinished,
-                "finish user moved resized",
-                () => {
-                    workspace.slotWindowClose.connect(() => {});
-                    this.removeCascadeIfNotApplying();
-                    this.applyGaps();
-                },
-            ],
             [this.window.fullScreenChanged, "fullscreen changed"],
             [this.window.maximizedChanged, "maximized changed"],
             [this.window.minimizedChanged, "unminimized"],

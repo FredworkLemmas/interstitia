@@ -75,7 +75,16 @@ workspace-wide signals → TileableWindow.applyGapsAll()  (070_reaction.js)
 if (coordinator.mouseDragOrResizeInProgress) return; // unconditional
 ```
 
-**After drag ends:** `interactiveMoveResizeFinished` calls `applyGaps()` once to snap the window to its final gapped position.
+**On drag start** (`interactiveMoveResizeStarted`): the pre-drag geometry and tile state are recorded on the `TileableWindow` instance (`_dragStartGeometry`, `_dragStartWasTiled`). This must happen before Plasma visually resizes the window to its floating size.
+
+**On drag end** (`interactiveMoveResizeFinished` in `setupMouseDragTracking`):
+1. `coordinator.mouseDragOrResizeInProgress = false` is set first
+2. If the window was tiled before the drag, its recorded tiled dimensions (width/height) are restored at the drop position (x/y)
+3. `applyGaps()` is then called to snap to the final gapped position
+
+**Important:** `interactiveMoveResizeFinished` must NOT be in `getTriggers` — it is fully handled in `setupMouseDragTracking`. If it were in both places, `applyGaps` would be called while `mouseDragOrResizeInProgress` is still `true` (because `getTriggers` connects before `setupMouseDragTracking`), causing the post-drag snap to silently do nothing.
+
+**Known limitation:** Plasma saves the window's restore geometry before firing `interactiveMoveResizeStarted`, so we cannot intercept it. While dragging a tiled window, it will show its pre-tiled floating size. The tiled dimensions are restored only on release. Setting `this.window.frameGeometry = this.window.frameGeometry` in the drag start handler has no effect on Plasma's stored restore geometry.
 
 ## `coordinator.block` vs `mouseDragOrResizeInProgress`
 
@@ -109,5 +118,5 @@ Key log patterns:
 
 ## Known Issues / In Progress
 
-- **Drag/resize causes shrink or vanish**: The `mouseDragOrResizeInProgress` guard has escape conditions (750ms timeout + size change check) that allow `applyGaps` to fire mid-drag. Fix: make the guard an unconditional `return`.
+- **Tiled window shows floating size while dragging**: Plasma restores the pre-tiled floating dimensions when a drag starts and there is no way to prevent this from a script. Tiled dimensions are restored on release. Considered acceptable for now.
 - **`panel.*` flags are global**: Panel presence is configured globally but only the primary screen has a panel in a multi-monitor setup. Tiled windows on auxiliary screens may incorrectly suppress gaps on panel-side edges.
