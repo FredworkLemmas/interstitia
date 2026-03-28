@@ -26,7 +26,7 @@ global.config = { includeMaximized: false, excludeMode: true, includeMode: false
 
 // Load and evaluate the files in order (similar to bundle task)
 const filesToLoad = [
-    "contents/code/04_windowing.js",
+    "contents/code/040_windowing.js",
     "contents/code/035_tileable_window.js",
 ];
 

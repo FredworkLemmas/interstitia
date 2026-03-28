@@ -4,17 +4,9 @@ from invocate import task
 @task(namespace='dev', name='bundle')
 def bundle(c):
     """Bundle the modular JS files into main.js"""
-    files = [
-        'contents/code/01_init.js',
-        'contents/code/02_logging.js',
-        'contents/code/03_config.js',
-        'contents/code/035_tileable_window.js',
-        'contents/code/04_windowing.js',
-        'contents/code/05_gaps.js',
-        'contents/code/06_cascade.js',
-        'contents/code/07_reaction.js',
-        'contents/code/08_main_loop.js'
-    ]
+    import glob
+    import os
+    files = sorted([f for f in glob.glob('contents/code/*.js') if os.path.basename(f) != 'main.js'])
     c.run(f'cat {" ".join(files)} > contents/code/main.js')
 
 
