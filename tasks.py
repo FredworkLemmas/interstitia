@@ -8,6 +8,7 @@ def bundle(c):
         'contents/code/01_init.js',
         'contents/code/02_logging.js',
         'contents/code/03_config.js',
+        'contents/code/035_tileable_window.js',
         'contents/code/04_windowing.js',
         'contents/code/05_gaps.js',
         'contents/code/06_cascade.js',

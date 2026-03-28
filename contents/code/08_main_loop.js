@@ -33,8 +33,8 @@ workspace.windowActivated.connect((client) => {
 
 // init interstitia environment
 const initialWindows = workspace.windowList ? workspace.windowList() : workspace.clientList();
-initialWindows.forEach((client) => onAdded(client));
-workspace.windowAdded.connect(onAdded);
+initialWindows.forEach((client) => TileableWindow.get(client).initialize());
+workspace.windowAdded.connect((client) => TileableWindow.get(client).initialize());
 
 // refresh tiling state
 onRelayouted();
