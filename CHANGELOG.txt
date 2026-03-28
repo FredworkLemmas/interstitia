@@ -6,6 +6,11 @@
 - Border calculation tweaks to allow for better consistency across applications.
 - Updates to support Plasma 6.6
 
+[ 1.1.0 ]
+- Refactored core logic into TileableWindow, ActiveWindow, and TileableWindowGeometry classes
+- Fixed maximized windows not receiving gaps on auxiliary screens (screens without a panel)
+- Fixed static class field syntax incompatibility with KWin's JS engine
+
 [ 1.0.0 ]
 - Renamed "Tile gaps" project to Interstitia
 - Reset versioning to 1.0.0
