@@ -494,7 +494,7 @@ class TileableWindow {
      * @returns {boolean} True if the window is maximized.
      */
     isMaximized() {
-        return new TileableWindowGeometry(this.window.frameGeometry).equals(workspace.clientArea(KWin.MaximizeArea, this.window));
+        return new TileableWindowGeometry(this.window.frameGeometry).nearlyEquals(workspace.clientArea(KWin.MaximizeArea, this.window), 5);
     }
 
     // --- Cascade State ---
@@ -525,10 +525,29 @@ class TileableWindow {
      * @param {boolean} [updateCascade=false] - Whether to trigger a cascade update after applying gaps.
      */
     applyGaps(updateCascade = false) {
-        if (coordinator.block || !this.window || this.shouldIgnore()) return;
+        if (coordinator.block || !this.window) return;
 
-        if (this.isInCascade() && !updateCascade) {
-            debug("applyGaps: skipping because window is in cascade state:", this.getCaption());
+        // Cascade cleanup must run before shouldIgnore() — otherwise a maximized window
+        // with includeMaximized=false would return early and stay in its cascade group.
+        let wasRemovedFromCascadeByMaximize = false;
+        if (this.isInCascade()) {
+            if (this.isMaximized()) {
+                // Maximized windows should leave the cascade and get normal gap treatment.
+                const key = this.window.interstitia_cascadeSlotKey;
+                debug("applyGaps: cascade member maximized, removing from group", key);
+                TileableWindow.removeFromCascadeGroup(this, key);
+                wasRemovedFromCascadeByMaximize = true;
+                // Fall through to normal gap application.
+            } else if (!updateCascade) {
+                debug("applyGaps: skipping because window is in cascade state:", this.getCaption());
+                return;
+            }
+        }
+
+        if (this.shouldIgnore()) {
+            // Even if we skip gap application, raise the maximized window above the cascade
+            // members that reapplyCascade just set as active.
+            if (wasRemovedFromCascadeByMaximize) workspace.activeWindow = this.window;
             return;
         }
 
@@ -589,6 +608,10 @@ class TileableWindow {
             debug("applyGaps: exception during gap calculation:", e);
         } finally {
             coordinator.block = false;
+        }
+
+        if (wasRemovedFromCascadeByMaximize) {
+            workspace.activeWindow = this.window;
         }
 
         if (updateCascade) {
