@@ -5,14 +5,14 @@ from invocate import task
 def bundle(c):
     """Bundle the modular JS files into main.js"""
     files = [
-        'contents/code/init.js',
-        'contents/code/logging.js',
-        'contents/code/config.js',
-        'contents/code/windowing.js',
-        'contents/code/gaps.js',
-        'contents/code/cascade.js',
-        'contents/code/reaction.js',
-        'contents/code/main_loop.js'
+        'contents/code/01_init.js',
+        'contents/code/02_logging.js',
+        'contents/code/03_config.js',
+        'contents/code/04_windowing.js',
+        'contents/code/05_gaps.js',
+        'contents/code/06_cascade.js',
+        'contents/code/07_reaction.js',
+        'contents/code/08_main_loop.js'
     ]
     c.run(f'cat {" ".join(files)} > contents/code/main.js')
 
