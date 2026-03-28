@@ -8,10 +8,6 @@ if (workspace.configChanged !== undefined) {
     });
 }
 
-// initialization
-debug("initializing");
-debug("");
-
 // attempt to register shortcut
 if (typeof registerShortcut === "undefined") {
     console.log("interstitia: registerShortcut is UNDEFINED");
@@ -32,6 +28,7 @@ workspace.windowActivated.connect((client) => {
 });
 
 // init interstitia environment
+debug("initializing interstitia");
 const initialWindows = workspace.windowList ? workspace.windowList() : workspace.clientList();
 initialWindows.forEach((client) => TileableWindow.get(client).initialize());
 workspace.windowAdded.connect((client) => TileableWindow.get(client).initialize());
