@@ -26,6 +26,12 @@ def install(c):
     c.run('sh ./install.sh')
 
 
+@task(namespace='dev', name='restart-kwin')
+def restart_kwin(c):
+    """Restart KWin (Wayland). Required to pick up script changes after a full reload."""
+    c.run('kwin_wayland --replace &')
+
+
 @task(namespace='dev', name='release', pre=[bundle])
 def release(c):
     c.run('sh ./package.sh')

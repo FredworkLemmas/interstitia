@@ -39,5 +39,17 @@ const initialWindows = workspace.windowList ? workspace.windowList() : workspace
 initialWindows.forEach((client) => TileableWindow.get(client).initialize());
 workspace.windowAdded.connect((client) => TileableWindow.get(client).initialize());
 
+// Remove closed windows from any cascade group they belonged to.
+workspace.windowRemoved.connect((client) => {
+    const key = client.interstitia_cascadeSlotKey;
+    if (key) {
+        const tw = TileableWindow.get(client);
+        if (tw) {
+            debug("windowRemoved: removing closed window from cascade group", key, tw.getCaption());
+            TileableWindow.removeFromCascadeGroup(tw, key);
+        }
+    }
+});
+
 // refresh tiling state
 onRelayouted();

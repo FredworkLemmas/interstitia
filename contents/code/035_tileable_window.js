@@ -17,6 +17,13 @@ class WindowCoordinator {
         this.block = false;
         /** @type {boolean} Tracks if the user is currently dragging or resizing a window. */
         this.mouseDragOrResizeInProgress = false;
+        /**
+         * Central cascade registry.
+         * Map<slotKey, { slotGeometry: TileableWindowGeometry, members: string[], output }>
+         * slotKey is "x,y,w,h" of the gapped slot geometry.
+         * members is an ordered array of window internalIds; last member is on top.
+         */
+        this.cascadeGroups = new Map();
         WindowCoordinator.instance = this;
     }
 
@@ -135,6 +142,146 @@ class TileableWindow {
         }
         const allWindows = workspace.windowList ? workspace.windowList() : workspace.clientList();
         allWindows.forEach((client) => TileableWindow.get(client).applyGaps());
+    }
+
+    // --- Cascade Registry Helpers ---
+
+    /**
+     * Produce a stable slot key string from a geometry object.
+     * @param {object} geo
+     * @returns {string}
+     */
+    static slotKey(geo) {
+        return `${Math.round(geo.x)},${Math.round(geo.y)},${Math.round(geo.width)},${Math.round(geo.height)}`;
+    }
+
+    /**
+     * Find a TileableWindow by internalId by scanning the window list.
+     * @param {string} internalId
+     * @returns {TileableWindow|null}
+     */
+    static getById(internalId) {
+        const allWindows = workspace.windowList ? workspace.windowList() : workspace.clientList();
+        for (const w of allWindows) {
+            if (w.internalId === internalId) return TileableWindow.get(w);
+        }
+        return null;
+    }
+
+    /**
+     * Remove a window from its cascade group. Auto-dissolves the group if only one member remains.
+     * @param {TileableWindow} tw
+     * @param {string} key
+     */
+    static removeFromCascadeGroup(tw, key) {
+        const group = coordinator.cascadeGroups.get(key);
+        if (!group) return;
+        const id = tw.window.internalId;
+        group.members = group.members.filter((mid) => mid !== id);
+        delete tw.window.interstitia_cascadeSlotKey;
+        debug("removeFromCascadeGroup: removed", tw.getCaption(), "from group", key, "remaining:", group.members.length);
+        if (group.members.length <= 1) {
+            TileableWindow.dissolveCascadeGroup(key);
+        } else {
+            TileableWindow.reapplyCascade(key, null);
+        }
+    }
+
+    /**
+     * Add a window to an existing cascade group, placing it on top, and re-cascade.
+     * @param {TileableWindow} tw
+     * @param {string} key
+     */
+    static addToCascadeGroup(tw, key) {
+        const group = coordinator.cascadeGroups.get(key);
+        if (!group) return;
+        const id = tw.window.internalId;
+        if (!group.members.includes(id)) {
+            group.members.push(id);
+        }
+        tw.window.interstitia_cascadeSlotKey = key;
+        debug("addToCascadeGroup: added", tw.getCaption(), "to group", key);
+        TileableWindow.reapplyCascade(key, id);
+    }
+
+    /**
+     * Dissolve a cascade group: restore all members to the slot geometry and delete the group.
+     * @param {string} key
+     */
+    static dissolveCascadeGroup(key) {
+        const group = coordinator.cascadeGroups.get(key);
+        if (!group) return;
+        const slotGeo = group.slotGeometry;
+        debug("dissolveCascadeGroup: dissolving group", key, "restoring", group.members.length, "windows");
+        coordinator.block = true;
+        try {
+            group.members.forEach((id) => {
+                const tw = TileableWindow.getById(id);
+                if (tw) {
+                    delete tw.window.interstitia_cascadeSlotKey;
+                    tw.window.frameGeometry = {
+                        x: slotGeo.x,
+                        y: slotGeo.y,
+                        width: slotGeo.width,
+                        height: slotGeo.height,
+                    };
+                }
+            });
+        } finally {
+            coordinator.block = false;
+        }
+        coordinator.cascadeGroups.delete(key);
+    }
+
+    /**
+     * Apply the cascade offset layout to all members of a group.
+     * Members are laid out bottom-to-top in array order; activeId goes last (on top).
+     * @param {string} key
+     * @param {string|null} activeId - internalId of the window to place on top, or null to keep current order.
+     */
+    static reapplyCascade(key, activeId) {
+        const group = coordinator.cascadeGroups.get(key);
+        if (!group) return;
+        const slotGeo = group.slotGeometry;
+        const members = group.members;
+        const numWindows = members.length;
+        if (numWindows === 0) return;
+        const offset = 32;
+        const newWidth = slotGeo.width - offset * (numWindows - 1);
+        const newHeight = slotGeo.height - offset * (numWindows - 1);
+
+        // Active window goes last (on top, furthest right/down)
+        const ordered = activeId
+            ? members.filter((id) => id !== activeId).concat([activeId])
+            : members.slice();
+
+        debug("reapplyCascade: laying out", numWindows, "windows for group", key);
+
+        coordinator.block = true;
+        try {
+            ordered.forEach((id, index) => {
+                const tw = TileableWindow.getById(id);
+                if (!tw) return;
+                const newGeo = {
+                    x: slotGeo.x + index * offset,
+                    y: slotGeo.y + index * offset,
+                    width: newWidth,
+                    height: newHeight,
+                };
+                debug("reapplyCascade: positioning", tw.getCaption(), "at index", index, newGeo.x, newGeo.y);
+                tw.window.frameGeometry = newGeo;
+                if (id !== activeId) {
+                    workspace.activeWindow = tw.window;
+                }
+            });
+        } finally {
+            coordinator.block = false;
+        }
+
+        if (activeId) {
+            const activeTw = TileableWindow.getById(activeId);
+            if (activeTw) workspace.activeWindow = activeTw.window;
+        }
     }
 
     // --- Utilities (from 04_windowing.js) ---
@@ -350,20 +497,56 @@ class TileableWindow {
         return new TileableWindowGeometry(this.window.frameGeometry).equals(workspace.clientArea(KWin.MaximizeArea, this.window));
     }
 
+    // --- Cascade State ---
+
+    /**
+     * Returns the cascade group this window belongs to, or null if not in a cascade.
+     * @returns {{slotGeometry, members: string[], output}|null}
+     */
+    getCascadeGroup() {
+        const key = this.window.interstitia_cascadeSlotKey;
+        if (!key) return null;
+        return coordinator.cascadeGroups.get(key) || null;
+    }
+
+    /**
+     * Returns true if this window is currently a member of a cascade group.
+     * @returns {boolean}
+     */
+    isInCascade() {
+        return this.getCascadeGroup() !== null;
+    }
+
     // --- Gap Logic (from 05_gaps.js) ---
 
     /**
      * Main entry point for applying gaps to the window.
      * Orchestrates the calculation and application of gaps against both screen edges and other windows.
-     * Includes logic to debounce updates during active mouse resizing.
      * @param {boolean} [updateCascade=false] - Whether to trigger a cascade update after applying gaps.
      */
     applyGaps(updateCascade = false) {
         if (coordinator.block || !this.window || this.shouldIgnore()) return;
 
-        if (this.window.interstitia_cascade_data && this.window.interstitia_cascade_data.cascadeState && !updateCascade) {
+        if (this.isInCascade() && !updateCascade) {
             debug("applyGaps: skipping because window is in cascade state:", this.getCaption());
             return;
+        }
+
+        // Both quickTileModeChanged and tileChanged fire applyGaps(true) for the same tile op.
+        // After the first call runs reapplyCascade, the window is at its cascade-offset position.
+        // The second call would then read that offset position and compute wrong gaps.
+        // Use a 0ms QTimer to debounce: only the first call processes, the second is skipped.
+        if (this.isInCascade() && updateCascade) {
+            if (this._cascadeUpdateDebouncing) {
+                debug("applyGaps: cascade update debounced (duplicate signal), skipping for", this.getCaption());
+                return;
+            }
+            this._cascadeUpdateDebouncing = true;
+            const timer = new QTimer();
+            timer.interval = 0;
+            timer.singleShot = true;
+            timer.timeout.connect(() => { this._cascadeUpdateDebouncing = false; });
+            timer.start();
         }
 
         if (coordinator.mouseDragOrResizeInProgress) {
@@ -376,25 +559,37 @@ class TileableWindow {
         debug("gaps for", this.getCaption());
         debug("old geo", new TileableWindowGeometry(this.window.frameGeometry).toString());
 
-        const clientGeometries = workspace.windowList().reduce((acc, c) => {
-            const tw = TileableWindow.get(c);
-            if (!tw.shouldIgnore()) {
-                acc[c.internalId] = new TileableWindowGeometry(c.frameGeometry);
-            }
-            return acc;
-        }, {});
+        // Exclude other members of this window's cascade group from the layout scan —
+        // they're stacked here and would interfere with inter-window gap insertion.
+        const myKey = this.window.interstitia_cascadeSlotKey;
+        let clientGeometries = {};
+        try {
+            clientGeometries = workspace.windowList().reduce((acc, c) => {
+                const tw = TileableWindow.get(c);
+                if (tw && !tw.shouldIgnore() && c.frameGeometry) {
+                    if (myKey && c.interstitia_cascadeSlotKey === myKey && c.internalId !== this.window.internalId) {
+                        return acc;
+                    }
+                    acc[c.internalId] = new TileableWindowGeometry(c.frameGeometry);
+                }
+                return acc;
+            }, {});
 
-        this.applyGapsArea(clientGeometries);
-        this.applyGapsWindows(clientGeometries);
+            this.applyGapsArea(clientGeometries);
+            this.applyGapsWindows(clientGeometries);
 
-        for (const c of workspace.windowList()) {
-            if (c.internalId in clientGeometries && !new TileableWindowGeometry(c.frameGeometry).equals(clientGeometries[c.internalId])) {
-                debug("set geometry", TileableWindow.get(c).getCaption(), new TileableWindowGeometry(clientGeometries[c.internalId]).toString());
-                c.frameGeometry = clientGeometries[c.internalId];
+            for (const c of workspace.windowList()) {
+                if (c.internalId in clientGeometries && c.frameGeometry &&
+                    !new TileableWindowGeometry(c.frameGeometry).equals(clientGeometries[c.internalId])) {
+                    debug("set geometry", TileableWindow.get(c).getCaption(), new TileableWindowGeometry(clientGeometries[c.internalId]).toString());
+                    c.frameGeometry = clientGeometries[c.internalId];
+                }
             }
+        } catch (e) {
+            debug("applyGaps: exception during gap calculation:", e);
+        } finally {
+            coordinator.block = false;
         }
-
-        coordinator.block = false;
 
         if (updateCascade) {
             debug("applyGaps: updateCascade is true for", this.getCaption());
@@ -412,6 +607,7 @@ class TileableWindow {
     applyGapsArea(clientGeometries) {
         let grid = this.getGridAnchors();
         let geo = clientGeometries[this.window.internalId];
+        if (!grid || !geo) return;
 
         // Snapping logic for each edge (left, right, top, bottom)
         // Checks if the window edge is "near" a standard anchor point (like screen edge or half-point)
@@ -473,6 +669,7 @@ class TileableWindow {
             if (this.shouldIgnoreOther(tw2)) continue;
 
             let geo2 = clientGeometries[c2.internalId];
+            if (!geo2) continue;
 
             // Horizontal gap check (side-by-side windows)
             if (TileableWindow.overlapVer(geo1, geo2)) {
@@ -514,135 +711,70 @@ class TileableWindow {
         geo1.y = geo1.top;
     }
 
-    // --- Cascade Logic (from 06_cascade.js) ---
+    // --- Cascade Logic ---
 
     /**
-     * Initiates a cascade for this window and any windows occupying the same slot.
-     * Captures current state (desktops, output, geometry) before starting.
-     * @param {object} applyGapsGeometry - The target geometry for the cascade group base.
+     * Called after applyGaps when a tile/quick-tile change occurs (updateCascade=true).
+     * Stores the gapped geometry and, if this window is in a cascade group,
+     * updates the group's slot geometry and re-lays out the cascade.
+     * @param {object} applyGapsGeometry - The freshly-computed gapped geometry for this window.
      */
     applyCascade(applyGapsGeometry) {
-        if (!this.window.interstitia_cascade_data) {
-            this.window.interstitia_cascade_data = {};
-        }
+        if (!applyGapsGeometry) return;
+        const geo = new TileableWindowGeometry(applyGapsGeometry);
+        // Store latest gapped geometry so startCascade can use it as the slot origin.
+        this.window.interstitia_applyGapsGeometry = geo;
 
-        this.window.interstitia_cascade_data.activities = this.window.activities;
-        this.window.interstitia_cascade_data.desktops = this.window.desktops;
-        this.window.interstitia_cascade_data.screen = this.getOutput();
-        this.window.interstitia_cascade_data.applyGapsGeometry = new TileableWindowGeometry(applyGapsGeometry);
-        if (this.window.interstitia_cascade_data.cascadeState === undefined) {
-            this.window.interstitia_cascade_data.cascadeState = false;
-        }
-        this.window.interstitia_cascade_data.timestamp = Date.now();
+        const key = this.window.interstitia_cascadeSlotKey;
+        if (!key) return;
+        const group = coordinator.cascadeGroups.get(key);
+        if (!group) return;
 
-        const allWindows = workspace.windowList ? workspace.windowList() : workspace.clientList();
-        const otherClients = [];
-
-        allWindows.forEach((other) => {
-            if (other === this.window) return;
-            const twOther = TileableWindow.get(other);
-            if (twOther.shouldIgnore()) return;
-
-            const otherGeometry = other.frameGeometry;
-            if (
-                this.isOnSameDesktop(twOther) &&
-                this.isOnSameActivity(twOther) &&
-                this.getOutput() === twOther.getOutput() &&
-                new TileableWindowGeometry(applyGapsGeometry).nearlyEquals(otherGeometry)
-            ) {
-                otherClients.push(other);
-            }
-        });
-
-        debug("applyCascade: found group of", otherClients.length + 1, "windows for slot");
-        this.applyCascadeGroup(otherClients);
-    }
-
-    /**
-     * Cleans up cascade-related metadata if it's no longer needed.
-     * Uses a short delay to ensure that rapid state changes don't prematurely
-     * clear the data while it might still be used by concurrent logic.
-     */
-    removeCascadeIfNotApplying() {
-        if (!this.window || !this.window.interstitia_cascade_data) return;
-
-        if (this.window.interstitia_cascade_data.cascadeState) {
+        // If the window has moved to a genuinely different tile slot, it should leave the
+        // cascade group rather than dragging all other members to the new position.
+        // Use the max cascade offset as tolerance: positions within that range are just
+        // cascade layout, not a real slot change.
+        const slot = group.slotGeometry;
+        const maxCascadeOffset = (group.members.length - 1) * 32;
+        if (slot && (Math.abs(geo.x - slot.x) > maxCascadeOffset + 50 || Math.abs(geo.y - slot.y) > maxCascadeOffset + 50)) {
+            debug("applyCascade: window moved to different slot, removing from cascade group", key);
+            TileableWindow.removeFromCascadeGroup(this, key);
             return;
         }
 
-        const timeout = 500;
-        const timer = new QTimer();
-        timer.interval = timeout;
-        timer.singleShot = true;
-        timer.timeout.connect(() => {
-            if (this.window.interstitia_cascade_data && Date.now() - this.window.interstitia_cascade_data.timestamp >= timeout) {
-                debug("removeCascadeIfNotApplying: clearing cascade data for", this.getCaption());
-                delete this.window.interstitia_cascade_data;
-            }
-        });
-        timer.start();
+        debug("applyCascade: updating slotGeometry for cascade group", key);
+        group.slotGeometry = geo;
+        TileableWindow.reapplyCascade(key, this.window.internalId);
     }
 
     /**
-     * Applies the actual cascade layout to a group of windows.
-     * Calculated an offset-based layout where each window is shifted slightly
-     * from the previous one, and the current window is placed on top.
-     * @param {KWin.Window[]} otherClients - The other windows in the cascade group.
+     * Look for a cascade group whose slot detection zone contains this window's center.
+     * The detection zone is the center half of the slot (25%–75% on each axis).
+     * Only considers groups on the same output and desktop.
+     * @returns {string|null} The matching slot key, or null.
      */
-    applyCascadeGroup(otherClients) {
-        const group = [this.window].concat(otherClients);
-        const hasCascade = group.some((c) => c.interstitia_cascade_data && c.interstitia_cascade_data.cascadeState);
+    _findCascadeDropTarget() {
+        const fg = this.window.frameGeometry;
+        const centerX = fg.x + fg.width / 2;
+        const centerY = fg.y + fg.height / 2;
 
-        let applyGapsGeometry = this.window.interstitia_cascade_data ? this.window.interstitia_cascade_data.applyGapsGeometry : null;
+        for (const [key, group] of coordinator.cascadeGroups) {
+            const slot = group.slotGeometry;
+            const zoneX = slot.x + slot.width / 4;
+            const zoneY = slot.y + slot.height / 4;
+            const zoneW = slot.width / 2;
+            const zoneH = slot.height / 2;
 
-        if (!applyGapsGeometry) {
-            applyGapsGeometry = new TileableWindowGeometry(this.window.frameGeometry);
+            if (centerX >= zoneX && centerX <= zoneX + zoneW && centerY >= zoneY && centerY <= zoneY + zoneH) {
+                if (group.members.length > 0) {
+                    const memberTw = TileableWindow.getById(group.members[0]);
+                    if (memberTw && this.isOnSameDesktop(memberTw) && this.isOnSameOutput(memberTw)) {
+                        return key;
+                    }
+                }
+            }
         }
-
-        if (!hasCascade) {
-            debug("applyCascadeGroup: cascade is disabled, resetting geometries for slot");
-            group.forEach((c) => {
-                c.frameGeometry = new TileableWindowGeometry(applyGapsGeometry);
-            });
-            return;
-        }
-
-        const offset = 32;
-        const numWindows = group.length;
-        const newWidth = applyGapsGeometry.width - offset * (numWindows - 1);
-        const newHeight = applyGapsGeometry.height - offset * (numWindows - 1);
-
-        debug("applyCascadeGroup: cascading", numWindows, "windows with offset", offset);
-
-        const others = group.filter((c) => c !== this.window);
-
-        const clientGeo = {
-            x: applyGapsGeometry.x + others.length * offset,
-            y: applyGapsGeometry.y + others.length * offset,
-            width: newWidth,
-            height: newHeight,
-        };
-        debug("positioning primary cascaded window:", this.getCaption(), "on top at", clientGeo.x, clientGeo.y);
-
-        coordinator.block = true;
-        try {
-            others.forEach((c, index) => {
-                const newGeo = {
-                    x: applyGapsGeometry.x + index * offset,
-                    y: applyGapsGeometry.y + index * offset,
-                    width: newWidth,
-                    height: newHeight,
-                };
-                debug("positioning cascaded window:", TileableWindow.get(c).getCaption(), "at", newGeo.x, newGeo.y);
-                c.frameGeometry = newGeo;
-                workspace.activeWindow = c;
-            });
-            this.window.frameGeometry = clientGeo;
-        } finally {
-            coordinator.block = false;
-        }
-
-        workspace.activeWindow = this.window;
+        return null;
     }
 
     // --- Reaction/Events (from 07_reaction.js) ---
@@ -668,6 +800,12 @@ class TileableWindow {
             // Record geometry and tile state before Plasma restores the floating size.
             this._dragStartGeometry = new TileableWindowGeometry(this.window.frameGeometry);
             this._dragStartWasTiled = this.window.quickTileMode !== 0;
+            // Leave cascade group on drag start.
+            this._dragStartCascadeKey = this.window.interstitia_cascadeSlotKey || null;
+            if (this._dragStartCascadeKey) {
+                debug("drag start: leaving cascade group", this._dragStartCascadeKey);
+                TileableWindow.removeFromCascadeGroup(this, this._dragStartCascadeKey);
+            }
             debug("drag start: wasTiled", this._dragStartWasTiled, "geo", this._dragStartGeometry.toString());
         });
 
@@ -688,8 +826,16 @@ class TileableWindow {
             }
             this._dragStartGeometry = null;
             this._dragStartWasTiled = false;
-            this.removeCascadeIfNotApplying();
-            this.applyGaps();
+
+            // Check if dropped onto a cascade group; if so, join it.
+            const dropTarget = this._findCascadeDropTarget();
+            if (dropTarget) {
+                debug("drag end: joining cascade group", dropTarget);
+                TileableWindow.addToCascadeGroup(this, dropTarget);
+            } else {
+                this.applyGaps();
+            }
+            this._dragStartCascadeKey = null;
         });
     }
 
@@ -708,7 +854,6 @@ class TileableWindow {
                 if (customAction) {
                     customAction();
                 } else {
-                    this.removeCascadeIfNotApplying();
                     this.applyGaps();
                 }
             });
@@ -781,7 +926,8 @@ class ActiveWindow extends TileableWindow {
     }
 
     /**
-     * Select all windows that occupy the same slot as this window.
+     * Select all windows that occupy the same slot as this window via geometry scan.
+     * Used only when creating a new cascade group (before the registry exists for this slot).
      * @returns {TileableWindow[]} The windows in the same slot.
      */
     selectSameSlotWindows() {
@@ -792,12 +938,7 @@ class ActiveWindow extends TileableWindow {
         allWindows.forEach((window) => {
             const tw = TileableWindow.get(window);
             if (this.isOnSameDesktop(tw) && this.isOnSameActivity(tw) && new TileableWindowGeometry(fg).nearlyEquals(window.frameGeometry)) {
-                console.log(
-                    "interstitia: Same slot window found:",
-                    tw.getCaption(),
-                    "Geometry:",
-                    JSON.stringify(window.frameGeometry),
-                );
+                debug("selectSameSlotWindows: found", tw.getCaption(), JSON.stringify(window.frameGeometry));
                 sameSlotWindows.push(tw);
             }
         });
@@ -806,42 +947,62 @@ class ActiveWindow extends TileableWindow {
 
     /**
      * Begin cascading windows that share the same slot as this window.
+     * If a cascade group already exists for this slot, re-cascade with the active window on top.
+     * If pressing again on an already-cascaded group, cycle active to top (furthest right/down).
      */
     startCascade() {
         debug("startCascade method triggered for", this.getCaption());
-        const group = this.selectSameSlotWindows();
-        debug("startCascade: enabling cascade state for group of", group.length);
-        group.forEach((tw) => {
-            if (!tw.window.interstitia_cascade_data) {
-                tw.window.interstitia_cascade_data = {};
-            }
-            tw.window.interstitia_cascade_data.cascadeState = true;
-            tw.window.interstitia_cascade_data.timestamp = Date.now();
+
+        const myKey = this.window.interstitia_cascadeSlotKey;
+        if (myKey && coordinator.cascadeGroups.has(myKey)) {
+            // Group already exists — re-cascade placing this window on top.
+            debug("startCascade: group already exists for", myKey, "— re-cascading with active on top");
+            TileableWindow.reapplyCascade(myKey, this.window.internalId);
+            return;
+        }
+
+        // Find all windows in the same slot via geometry scan.
+        const sameSlotWindows = this.selectSameSlotWindows();
+        if (sameSlotWindows.length <= 1) {
+            debug("startCascade: only one window in slot, nothing to cascade");
+            return;
+        }
+
+        // Use this window's stored gapped geometry as the slot origin.
+        const slotGeo = this.window.interstitia_applyGapsGeometry || new TileableWindowGeometry(this.window.frameGeometry);
+        const key = TileableWindow.slotKey(slotGeo);
+
+        debug("startCascade: creating cascade group", key, "with", sameSlotWindows.length, "windows");
+
+        const memberIds = sameSlotWindows.map((tw) => tw.window.internalId);
+        coordinator.cascadeGroups.set(key, {
+            slotGeometry: slotGeo,
+            members: memberIds,
+            output: this.getOutput(),
         });
 
-        this.applyCascadeGroup(
-            group.filter((tw) => tw.window.internalId !== this.window.internalId).map((tw) => tw.window),
-        );
+        sameSlotWindows.forEach((tw) => {
+            tw.window.interstitia_cascadeSlotKey = key;
+        });
+
+        TileableWindow.reapplyCascade(key, this.window.internalId);
     }
 
     /**
-     * Stop cascading windows that share the same slot as this window.
+     * Stop cascading: dissolve the group and restore all windows to the slot geometry.
+     * The currently active window ends up on top.
      */
     stopCascade() {
         debug("stopCascade method triggered for", this.getCaption());
-        const group = this.selectSameSlotWindows();
-        debug("stopCascade: disabling cascade state for group of", group.length);
-        group.forEach((tw) => {
-            if (!tw.window.interstitia_cascade_data) {
-                tw.window.interstitia_cascade_data = {};
-            }
-            tw.window.interstitia_cascade_data.cascadeState = false;
-            tw.window.interstitia_cascade_data.timestamp = Date.now();
-        });
 
-        this.applyCascadeGroup(
-            group.filter((tw) => tw.window.internalId !== this.window.internalId).map((tw) => tw.window),
-        );
+        const key = this.window.interstitia_cascadeSlotKey;
+        if (!key || !coordinator.cascadeGroups.has(key)) {
+            debug("stopCascade: window not in a cascade group");
+            return;
+        }
+
+        TileableWindow.dissolveCascadeGroup(key);
+        workspace.activeWindow = this.window;
     }
 }
 
