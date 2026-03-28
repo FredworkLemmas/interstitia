@@ -17,12 +17,6 @@ class WindowCoordinator {
         this.block = false;
         /** @type {boolean} Tracks if the user is currently dragging or resizing a window. */
         this.mouseDragOrResizeInProgress = false;
-        /** @type {object|null} Stores the geometry at the start of a drag/resize operation. */
-        this.mouseDragOrResizeStartingGeometry = null;
-        /** @type {number|null} Timestamp when the drag/resize operation started. */
-        this.mouseDragOrResizeStartTime = null;
-        /** @type {number|null} Number of updates received during the current drag/resize. */
-        this.mouseDragOrResizeNumUpdates = null;
         WindowCoordinator.instance = this;
     }
 
@@ -373,48 +367,8 @@ class TileableWindow {
         }
 
         if (coordinator.mouseDragOrResizeInProgress) {
-            debug(
-                "screen:",
-                this.getOutput(),
-                "x:",
-                this.window.x,
-                "y:",
-                this.window.y,
-                "width:",
-                this.window.width,
-                "height:",
-                this.window.height,
-            );
-            if (!coordinator.mouseDragOrResizeStartingGeometry) {
-                coordinator.mouseDragOrResizeStartTime = Date.now();
-                coordinator.mouseDragOrResizeNumUpdates = 1;
-                coordinator.mouseDragOrResizeStartingGeometry = {
-                    x: this.window.x,
-                    y: this.window.y,
-                    w: this.window.width,
-                    h: this.window.height,
-                };
-            }
-
-            debug(
-                "apply gaps",
-                this.getCaption(),
-                config.includeMaximized,
-                this.isMaximized(),
-                coordinator.block,
-                "mouseDrag:",
-                coordinator.mouseDragOrResizeInProgress,
-            );
-
-            if (Date.now() - coordinator.mouseDragOrResizeStartTime < 750) return;
-
-            if (
-                this.window.width == coordinator.mouseDragOrResizeStartingGeometry.w &&
-                this.window.height == coordinator.mouseDragOrResizeStartingGeometry.h
-            )
-                return;
-        } else if (coordinator.mouseDragOrResizeStartingGeometry) {
-            coordinator.mouseDragOrResizeStartingGeometry = null;
+            debug("applyGaps: skipping, drag/resize in progress", this.getCaption());
+            return;
         }
 
         coordinator.block = true;
@@ -711,11 +665,31 @@ class TileableWindow {
         this.window.interactiveMoveResizeStarted.connect(() => {
             debug("interactive move/resize started (mouse drag detected)", this.getCaption());
             coordinator.mouseDragOrResizeInProgress = true;
+            // Record geometry and tile state before Plasma restores the floating size.
+            this._dragStartGeometry = new TileableWindowGeometry(this.window.frameGeometry);
+            this._dragStartWasTiled = this.window.quickTileMode !== 0;
+            debug("drag start: wasTiled", this._dragStartWasTiled, "geo", this._dragStartGeometry.toString());
         });
 
         this.window.interactiveMoveResizeFinished.connect(() => {
             debug("interactive move/resize finished (mouse drag ended)", this.getCaption());
             coordinator.mouseDragOrResizeInProgress = false;
+            // If the window was tiled before the drag, restore its tiled dimensions
+            // at the drop position before applying gaps.
+            if (this._dragStartWasTiled && this._dragStartGeometry) {
+                const dropGeo = this.window.frameGeometry;
+                debug("drag end: restoring tiled dimensions", this._dragStartGeometry.width, "x", this._dragStartGeometry.height, "at", dropGeo.x, dropGeo.y);
+                this.window.frameGeometry = {
+                    x: dropGeo.x,
+                    y: dropGeo.y,
+                    width: this._dragStartGeometry.width,
+                    height: this._dragStartGeometry.height,
+                };
+            }
+            this._dragStartGeometry = null;
+            this._dragStartWasTiled = false;
+            this.removeCascadeIfNotApplying();
+            this.applyGaps();
         });
     }
 
@@ -750,15 +724,6 @@ class TileableWindow {
         return [
             [this.window.moveResizedChanged, "move resized changed"],
             [this.window.frameGeometryChanged, "frame geometry changed"],
-            [
-                this.window.interactiveMoveResizeFinished,
-                "finish user moved resized",
-                () => {
-                    workspace.slotWindowClose.connect(() => {});
-                    this.removeCascadeIfNotApplying();
-                    this.applyGaps();
-                },
-            ],
             [this.window.fullScreenChanged, "fullscreen changed"],
             [this.window.maximizedChanged, "maximized changed"],
             [this.window.minimizedChanged, "unminimized"],

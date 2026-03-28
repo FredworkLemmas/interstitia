@@ -6,6 +6,11 @@
 - Border calculation tweaks to allow for better consistency across applications.
 - Updates to support Plasma 6.6
 
+[ 1.1.1 ]
+- Fixed windows shrinking or vanishing while being dragged
+- Tiled windows now restore their tiled dimensions after being dragged and released
+- Fixed gaps not being re-applied after a drag/resize completes
+
 [ 1.1.0 ]
 - Refactored core logic into TileableWindow, ActiveWindow, and TileableWindowGeometry classes
 - Fixed maximized windows not receiving gaps on auxiliary screens (screens without a panel)
