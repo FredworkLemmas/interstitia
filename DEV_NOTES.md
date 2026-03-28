@@ -46,9 +46,8 @@ Since KWin scripts are typically single-file JavaScript execution environments w
 - **Purpose**: Abstracted utility functions for window properties and geometry.
 - **Key Logic**: 
     - Normalizes API differences between Plasma 5 and 6 (e.g., `frameGeometry` vs `geometry`).
-    - Provides `geometriesNearlyEqual` using a threshold to handle minor rounding errors or KWin adjustments.
+    - Includes `TileableWindowGeometry` class to handle geometry operations (copy, equality, approximate equality).
     - Implements relationship checks like `onSameDesktop`, `isOnSameActivity`, and `onSameOutput`.
-    - Includes `copyGeometry` to create detached geometry objects for calculations.
 
 ### `05_gaps.js`
 - **Purpose**: The engine for calculating and applying window gaps.

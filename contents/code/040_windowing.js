@@ -1,45 +1,70 @@
 /**
- * Deep-copy a geometry-like object and add convenience edges.
- * @param {{x:number,y:number,width:number,height:number}} geometry
- * @returns {{x:number,y:number,width:number,height:number,left:number,top:number,right:number,bottom:number}}
+ * TileableWindowGeometry Class
+ * Represents and compares window dimensions and positions.
  */
-function copyGeometry(geometry) {
-    return {
-        x: geometry.x,
-        y: geometry.y,
-        width: geometry.width,
-        height: geometry.height,
-        left: geometry.x,
-        top: geometry.y,
-        right: geometry.x + geometry.width,
-        bottom: geometry.y + geometry.height,
-    };
+class TileableWindowGeometry {
+    /**
+     * @param {object} geometry - Object with x, y, width, height properties.
+     */
+    constructor(geometry) {
+        this.x = geometry.x;
+        this.y = geometry.y;
+        this.width = geometry.width;
+        this.height = geometry.height;
+        this.left = geometry.x;
+        this.top = geometry.y;
+        this.right = geometry.x + geometry.width;
+        this.bottom = geometry.y + geometry.height;
+    }
+
+    /**
+     * Create a deep copy of this geometry.
+     * @returns {TileableWindowGeometry} A new instance with the same values.
+     */
+    copy() {
+        return new TileableWindowGeometry(this);
+    }
+
+    /**
+     * Strict equality check against another geometry.
+     * @param {object} other - The geometry to compare with.
+     * @returns {boolean}
+     */
+    equals(other) {
+        return (
+            this.x === other.x &&
+            this.y === other.y &&
+            this.width === other.width &&
+            this.height === other.height
+        );
+    }
+
+    /**
+     * Approximate equality check with a small threshold.
+     * @param {object} other - The geometry to compare with.
+     * @param {number} [threshold=10] - The maximum difference allowed for each property.
+     * @returns {boolean}
+     */
+    nearlyEquals(other, threshold = 10) {
+        return (
+            Math.abs(this.x - other.x) <= threshold &&
+            Math.abs(this.y - other.y) <= threshold &&
+            Math.abs(this.width - other.width) <= threshold &&
+            Math.abs(this.height - other.height) <= threshold
+        );
+    }
+
+    /**
+     * Returns a concise geometry string.
+     * @returns {string}
+     */
+    toString() {
+        return ["x", this.x, this.width, this.right, "y", this.y, this.height, this.bottom].join(" ");
+    }
 }
 
-/**
- * Strict geometry equality check.
- * @param {object} g1
- * @param {object} g2
- * @returns {boolean}
- */
-function geometriesEqual(g1, g2) {
-    return g1.x === g2.x && g1.y === g2.y && g1.width === g2.width && g1.height === g2.height;
-}
-
-/**
- * Approximate geometry equality with a small threshold.
- * @param {object} g1
- * @param {object} g2
- * @returns {boolean}
- */
-function geometriesNearlyEqual(g1, g2) {
-    var threshold = 10;
-    return (
-        Math.abs(g1.x - g2.x) <= threshold &&
-        Math.abs(g1.y - g2.y) <= threshold &&
-        Math.abs(g1.width - g2.width) <= threshold &&
-        Math.abs(g1.height - g2.height) <= threshold
-    );
+if (typeof global !== "undefined") {
+    global.TileableWindowGeometry = TileableWindowGeometry;
 }
 
 /**
@@ -64,7 +89,7 @@ function selectSameSlotWindows() {
     allWindows.forEach((window) => {
         const tw = TileableWindow.get(window);
         const windowGeometry = window.frameGeometry;
-        if (twActive.isOnSameDesktop(tw) && twActive.isOnSameActivity(tw) && geometriesNearlyEqual(fg, windowGeometry)) {
+        if (twActive.isOnSameDesktop(tw) && twActive.isOnSameActivity(tw) && new TileableWindowGeometry(fg).nearlyEquals(windowGeometry)) {
             console.log(
                 "interstitia: Same slot window found:",
                 tw.getCaption(),
@@ -131,11 +156,3 @@ function overlapVer(win1, win2) {
     );
 }
 
-/**
- * Get a concise geometry string; renamed from geometry().
- * @param {{x:number,y:number,width:number,height:number}} g
- * @returns {string}
- */
-function getWindowGeometry(g) {
-    return ["x", g.x, g.width, g.x + g.width, "y", g.y, g.height, g.y + g.height].join(" ");
-}

@@ -145,7 +145,7 @@ describe("TileableWindow Class", () => {
         const tw = TileableWindow.get(mockWindow);
         // Position window near top-left corner
         mockWindow.frameGeometry = { x: 5, y: 5, width: 400, height: 300 };
-        const geoms = { [mockWindow.internalId]: copyGeometry(mockWindow.frameGeometry) };
+        const geoms = { [mockWindow.internalId]: new TileableWindowGeometry(mockWindow.frameGeometry) };
         
         tw.applyGapsArea(geoms);
         

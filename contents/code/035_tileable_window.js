@@ -291,7 +291,7 @@ class TileableWindow {
      * @returns {boolean} True if the window is maximized.
      */
     isMaximized() {
-        return geometriesEqual(this.window.frameGeometry, workspace.clientArea(KWin.MaximizeArea, this.window));
+        return new TileableWindowGeometry(this.window.frameGeometry).equals(workspace.clientArea(KWin.MaximizeArea, this.window));
     }
 
     // --- Gap Logic (from 05_gaps.js) ---
@@ -358,12 +358,12 @@ class TileableWindow {
         coordinator.block = true;
         debug("----------------");
         debug("gaps for", this.getCaption());
-        debug("old geo", getWindowGeometry(this.window.frameGeometry));
+        debug("old geo", new TileableWindowGeometry(this.window.frameGeometry).toString());
 
         const clientGeometries = workspace.windowList().reduce((acc, c) => {
             const tw = TileableWindow.get(c);
             if (!tw.shouldIgnore()) {
-                acc[c.internalId] = copyGeometry(c.frameGeometry);
+                acc[c.internalId] = new TileableWindowGeometry(c.frameGeometry);
             }
             return acc;
         }, {});
@@ -372,8 +372,8 @@ class TileableWindow {
         this.applyGapsWindows(clientGeometries);
 
         for (const c of workspace.windowList()) {
-            if (c.internalId in clientGeometries && !geometriesEqual(c.frameGeometry, clientGeometries[c.internalId])) {
-                debug("set geometry", TileableWindow.get(c).getCaption(), getWindowGeometry(clientGeometries[c.internalId]));
+            if (c.internalId in clientGeometries && !new TileableWindowGeometry(c.frameGeometry).equals(clientGeometries[c.internalId])) {
+                debug("set geometry", TileableWindow.get(c).getCaption(), new TileableWindowGeometry(clientGeometries[c.internalId]).toString());
                 c.frameGeometry = clientGeometries[c.internalId];
             }
         }
@@ -513,7 +513,7 @@ class TileableWindow {
         this.window.interstitia_cascade_data.activities = this.window.activities;
         this.window.interstitia_cascade_data.desktops = this.window.desktops;
         this.window.interstitia_cascade_data.screen = this.getOutput();
-        this.window.interstitia_cascade_data.applyGapsGeometry = copyGeometry(applyGapsGeometry);
+        this.window.interstitia_cascade_data.applyGapsGeometry = new TileableWindowGeometry(applyGapsGeometry);
         if (this.window.interstitia_cascade_data.cascadeState === undefined) {
             this.window.interstitia_cascade_data.cascadeState = false;
         }
@@ -532,7 +532,7 @@ class TileableWindow {
                 this.isOnSameDesktop(twOther) &&
                 this.isOnSameActivity(twOther) &&
                 this.getOutput() === twOther.getOutput() &&
-                geometriesNearlyEqual(applyGapsGeometry, otherGeometry)
+                new TileableWindowGeometry(applyGapsGeometry).nearlyEquals(otherGeometry)
             ) {
                 otherClients.push(other);
             }
@@ -580,13 +580,13 @@ class TileableWindow {
         let applyGapsGeometry = this.window.interstitia_cascade_data ? this.window.interstitia_cascade_data.applyGapsGeometry : null;
 
         if (!applyGapsGeometry) {
-            applyGapsGeometry = copyGeometry(this.window.frameGeometry);
+            applyGapsGeometry = new TileableWindowGeometry(this.window.frameGeometry);
         }
 
         if (!hasCascade) {
             debug("applyCascadeGroup: cascade is disabled, resetting geometries for slot");
             group.forEach((c) => {
-                c.frameGeometry = copyGeometry(applyGapsGeometry);
+                c.frameGeometry = new TileableWindowGeometry(applyGapsGeometry);
             });
             return;
         }
