@@ -7,11 +7,11 @@ global.console = {
     debug: jest.fn()
 };
 
-// Read and evaluate the logging.js file in the global context
-const loggingCode = fs.readFileSync(path.join(__dirname, "../contents/code/logging.js"), "utf8");
+// Read and evaluate the 020_logging.js file in the global context
+const loggingCode = fs.readFileSync(path.join(__dirname, "../contents/code/020_logging.js"), "utf8");
 eval(loggingCode);
 
-describe("logging.js", () => {
+describe("02_logging.js", () => {
     beforeEach(() => {
         jest.clearAllMocks();
     });
