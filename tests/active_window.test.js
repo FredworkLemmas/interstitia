@@ -125,3 +125,162 @@ describe("ActiveWindow Class", () => {
         expect(otherWindow.interstitia_cascadeSlotKey).toBeUndefined();
     });
 });
+
+describe("cascade cycling", () => {
+    // Helpers to build minimal mock windows sharing the same slot geometry.
+    function makeWindow(id) {
+        return {
+            internalId: id,
+            caption: id,
+            output: 0,
+            desktops: [1],
+            activities: ["act-1"],
+            frameGeometry: { x: 100, y: 100, width: 800, height: 600 },
+            normalWindow: true,
+            onAllDesktops: false,
+        };
+    }
+
+    function createGroupWithMembers(windows) {
+        // Register instances so getById works.
+        windows.forEach((w) => TileableWindow.get(w));
+
+        const slotGeo = { x: 100, y: 100, width: 800, height: 600 };
+        const key = TileableWindow.slotKey(slotGeo);
+        const memberIds = windows.map((w) => w.internalId);
+
+        coordinator.cascadeGroups.set(key, {
+            slotGeometry: slotGeo,
+            members: memberIds,
+            output: 0,
+        });
+        windows.forEach((w) => {
+            w.interstitia_cascadeSlotKey = key;
+        });
+
+        return key;
+    }
+
+    beforeEach(() => {
+        jest.clearAllMocks();
+        TileableWindow._instances.clear();
+        coordinator.cascadeGroups.clear();
+        coordinator.block = false;
+        workspace.activeWindow = null;
+        workspace.windowList.mockReturnValue([]);
+    });
+
+    test("reapplyCascade keeps group.members in sync with visual order", () => {
+        const [wA, wB, wC] = ["A", "B", "C"].map(makeWindow);
+        const key = createGroupWithMembers([wA, wB, wC]);
+
+        // Members start as [A, B, C]. Promote B (not last) to front.
+        TileableWindow.reapplyCascade(key, "B");
+
+        const group = coordinator.cascadeGroups.get(key);
+        expect(group.members[group.members.length - 1]).toBe("B");
+        expect(group.members).toEqual(["A", "C", "B"]);
+    });
+
+    test("cycleCascade moves the front window to the back", () => {
+        const [wA, wB, wC] = ["A", "B", "C"].map(makeWindow);
+        const key = createGroupWithMembers([wA, wB, wC]);
+        // members = [A, B, C] → C is front
+
+        TileableWindow.cycleCascade(key);
+
+        const group = coordinator.cascadeGroups.get(key);
+        // C moved to index 0; B is new front
+        expect(group.members[0]).toBe("C");
+        expect(group.members[group.members.length - 1]).toBe("B");
+    });
+
+    test("cycleCascade with 2 windows swaps them", () => {
+        const [wA, wB] = ["A", "B"].map(makeWindow);
+        const key = createGroupWithMembers([wA, wB]);
+        // members = [A, B] → B is front
+
+        TileableWindow.cycleCascade(key);
+        let group = coordinator.cascadeGroups.get(key);
+        expect(group.members).toEqual(["B", "A"]);
+
+        TileableWindow.cycleCascade(key);
+        group = coordinator.cascadeGroups.get(key);
+        expect(group.members).toEqual(["A", "B"]);
+    });
+
+    test("repeated cycling restores original order after N rotations", () => {
+        const ids = ["A", "B", "C", "D"];
+        const windows = ids.map(makeWindow);
+        const key = createGroupWithMembers(windows);
+        // members = [A, B, C, D]
+
+        for (let i = 0; i < ids.length; i++) {
+            TileableWindow.cycleCascade(key);
+        }
+
+        const group = coordinator.cascadeGroups.get(key);
+        expect(group.members).toEqual(ids);
+    });
+
+    test("cycleCascade is a no-op on a single-member group", () => {
+        const [wA] = ["A"].map(makeWindow);
+        const key = createGroupWithMembers([wA]);
+
+        expect(() => TileableWindow.cycleCascade(key)).not.toThrow();
+        const group = coordinator.cascadeGroups.get(key);
+        expect(group.members).toEqual(["A"]);
+    });
+
+    test("startCascade promotes a background member to front", () => {
+        const [wA, wB, wC] = ["A", "B", "C"].map(makeWindow);
+        workspace.windowList.mockReturnValue([wA, wB, wC]);
+        const key = createGroupWithMembers([wA, wB, wC]);
+        // members = [A, B, C] → C is front
+
+        // Make B the active (background) window and press the shortcut.
+        workspace.activeWindow = wB;
+        wB.interstitia_cascadeSlotKey = key;
+        const active = ActiveWindow.getActive();
+        active.startCascade();
+
+        const group = coordinator.cascadeGroups.get(key);
+        expect(group.members[group.members.length - 1]).toBe("B");
+    });
+
+    test("startCascade cycles when the active window is already the front", () => {
+        const [wA, wB, wC] = ["A", "B", "C"].map(makeWindow);
+        workspace.windowList.mockReturnValue([wA, wB, wC]);
+        const key = createGroupWithMembers([wA, wB, wC]);
+        // members = [A, B, C] → C is front
+
+        // Make C (the current front) active and press the shortcut.
+        workspace.activeWindow = wC;
+        wC.interstitia_cascadeSlotKey = key;
+        const active = ActiveWindow.getActive();
+        active.startCascade();
+
+        const group = coordinator.cascadeGroups.get(key);
+        // C should have rotated to the back; B is new front.
+        expect(group.members[0]).toBe("C");
+        expect(group.members[group.members.length - 1]).toBe("B");
+    });
+
+    test("promoting then cycling completes a full round-trip", () => {
+        const [wA, wB, wC] = ["A", "B", "C"].map(makeWindow);
+        workspace.windowList.mockReturnValue([wA, wB, wC]);
+        const key = createGroupWithMembers([wA, wB, wC]);
+        // Start: [A, B, C] — C is front.
+
+        // Promote B (background) to front → [A, C, B]
+        workspace.activeWindow = wB;
+        wB.interstitia_cascadeSlotKey = key;
+        ActiveWindow.getActive().startCascade();
+        expect(coordinator.cascadeGroups.get(key).members).toEqual(["A", "C", "B"]);
+
+        // B is now front; press again → cycle B to back → [B, A, C]
+        workspace.activeWindow = wB;
+        ActiveWindow.getActive().startCascade();
+        expect(coordinator.cascadeGroups.get(key).members).toEqual(["B", "A", "C"]);
+    });
+});
