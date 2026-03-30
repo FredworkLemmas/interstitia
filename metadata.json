@@ -27,7 +27,7 @@
             "KWin/Script",
             "KCModule"
         ],
-        "Version": "1.1.1",
+        "Version": "1.1.2",
         "Website": "https://github.com/FredworkLemmas/interstitia"
     },
     "X-KDE-ConfigModule": "kwin/effects/configs/kcm_kwin4_genericscripted",
@@ -37,7 +37,7 @@
         "interstitia"
     ],
     "X-KDE-PluginKeyword": "interstitia",
-    "X-KDE-PluginInfo-Version": "1.1.1",
+    "X-KDE-PluginInfo-Version": "1.1.2",
     "X-KDE-PluginInfo-Website": "https://github.com/FredworkLemmas/interstitia",
     "X-KDE-PluginInfo-Category": "KWin Script",
     "X-KDE-PluginInfo-License": "GPLv3",
