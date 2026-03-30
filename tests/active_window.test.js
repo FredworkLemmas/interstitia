@@ -182,17 +182,17 @@ describe("cascade cycling", () => {
         expect(group.members).toEqual(["A", "C", "B"]);
     });
 
-    test("cycleCascade moves the front window to the back", () => {
+    test("cycleCascade brings the rear window to the front, shifting others back", () => {
         const [wA, wB, wC] = ["A", "B", "C"].map(makeWindow);
         const key = createGroupWithMembers([wA, wB, wC]);
-        // members = [A, B, C] → C is front
+        // members = [A, B, C] → C is front, A is rear
 
         TileableWindow.cycleCascade(key);
 
         const group = coordinator.cascadeGroups.get(key);
-        // C moved to index 0; B is new front
-        expect(group.members[0]).toBe("C");
-        expect(group.members[group.members.length - 1]).toBe("B");
+        // A (was rear) is now front; C (was front) is now second
+        expect(group.members).toEqual(["B", "C", "A"]);
+        expect(group.members[group.members.length - 1]).toBe("A");
     });
 
     test("cycleCascade with 2 windows swaps them", () => {
@@ -252,7 +252,7 @@ describe("cascade cycling", () => {
         const [wA, wB, wC] = ["A", "B", "C"].map(makeWindow);
         workspace.windowList.mockReturnValue([wA, wB, wC]);
         const key = createGroupWithMembers([wA, wB, wC]);
-        // members = [A, B, C] → C is front
+        // members = [A, B, C] → C is front, A is rear
 
         // Make C (the current front) active and press the shortcut.
         workspace.activeWindow = wC;
@@ -261,9 +261,9 @@ describe("cascade cycling", () => {
         active.startCascade();
 
         const group = coordinator.cascadeGroups.get(key);
-        // C should have rotated to the back; B is new front.
-        expect(group.members[0]).toBe("C");
-        expect(group.members[group.members.length - 1]).toBe("B");
+        // A (rear) comes to front; C (front) becomes second.
+        expect(group.members).toEqual(["B", "C", "A"]);
+        expect(group.members[group.members.length - 1]).toBe("A");
     });
 
     test("promoting then cycling completes a full round-trip", () => {
@@ -278,9 +278,9 @@ describe("cascade cycling", () => {
         ActiveWindow.getActive().startCascade();
         expect(coordinator.cascadeGroups.get(key).members).toEqual(["A", "C", "B"]);
 
-        // B is now front; press again → cycle B to back → [B, A, C]
+        // B is now front; press again → cycle: A (rear) comes to front → [C, B, A]
         workspace.activeWindow = wB;
         ActiveWindow.getActive().startCascade();
-        expect(coordinator.cascadeGroups.get(key).members).toEqual(["B", "A", "C"]);
+        expect(coordinator.cascadeGroups.get(key).members).toEqual(["C", "B", "A"]);
     });
 });

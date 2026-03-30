@@ -298,9 +298,10 @@ class TileableWindow {
         const group = coordinator.cascadeGroups.get(key);
         if (!group || group.members.length <= 1) return;
 
-        // Rotate: last element (current front) moves to index 0 (most backgrounded).
-        const front = group.members[group.members.length - 1];
-        group.members = [front, ...group.members.slice(0, group.members.length - 1)];
+        // Rotate: first element (current rear) moves to last position (front).
+        // All other windows shift back one position, and the frontmost becomes second.
+        const rear = group.members[0];
+        group.members = [...group.members.slice(1), rear];
 
         // New front is now the last element.
         const newFrontId = group.members[group.members.length - 1];
