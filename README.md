@@ -51,7 +51,7 @@ cd interstitia
 
 Interstitia includes a feature to "cascade" windows that occupy the same tiling slot (same size and position). This is useful when you have multiple windows stacked on top of each other and want to see them all at once without moving them.
 
-*   **Start Cascade (`Ctrl+}`):** Resizes and offsets windows in the current slot by 32 pixels, allowing you to see the title bars and edges of all windows in the stack.
+*   **Start Cascade (`Ctrl+}`):** Resizes and offsets windows in the current slot by 32 pixels, allowing you to see the title bars and edges of all windows in the stack. Keep pressing the key combo to cycle thru the windows in the cascade group.
 *   **Stop Cascade (`Ctrl+{`):** Resets all windows in the slot to their original tiled position and size.
 
 The cascade state is automatically cleared if you manually move or resize a window, ensuring the script doesn't interfere with your manual window management.
@@ -93,4 +93,4 @@ This work is licensed under the GNU General Public License v3.0.
 This program comes with absolutely no warranty.  
 This is free software, and you are welcome to redistribute and/or modify it under certain conditions.
 
-If you like this project, you can star the [github repo](https://github.com/FredworkLemmas/interstitia) or review the script in the kde store [https://www.pling.com/p/2349376/].
+If you like this project, you can star the [github repo](https://github.com/FredworkLemmas/interstitia) and review the script in the [kde store](https://www.pling.com/p/2349376/).
