@@ -255,6 +255,10 @@ class TileableWindow {
             ? members.filter((id) => id !== activeId).concat([activeId])
             : members.slice();
 
+        // Keep members in sync with the visual order so cycleCascade can rely on
+        // members[last] always being the current frontmost window.
+        group.members = ordered;
+
         debug("reapplyCascade: laying out", numWindows, "windows for group", key);
 
         coordinator.block = true;
@@ -282,6 +286,27 @@ class TileableWindow {
             const activeTw = TileableWindow.getById(activeId);
             if (activeTw) workspace.activeWindow = activeTw.window;
         }
+    }
+
+    /**
+     * Cycle the cascade order: move the current front window to the back,
+     * promoting the next window to the front.
+     * Requires group.members to be in bottom-to-top visual order (maintained by reapplyCascade).
+     * @param {string} key
+     */
+    static cycleCascade(key) {
+        const group = coordinator.cascadeGroups.get(key);
+        if (!group || group.members.length <= 1) return;
+
+        // Rotate: first element (current rear) moves to last position (front).
+        // All other windows shift back one position, and the frontmost becomes second.
+        const rear = group.members[0];
+        group.members = [...group.members.slice(1), rear];
+
+        // New front is now the last element.
+        const newFrontId = group.members[group.members.length - 1];
+        debug("cycleCascade: rotating group", key, "— new front:", newFrontId);
+        TileableWindow.reapplyCascade(key, newFrontId);
     }
 
     // --- Utilities (from 04_windowing.js) ---
@@ -970,17 +995,27 @@ class ActiveWindow extends TileableWindow {
 
     /**
      * Begin cascading windows that share the same slot as this window.
-     * If a cascade group already exists for this slot, re-cascade with the active window on top.
-     * If pressing again on an already-cascaded group, cycle active to top (furthest right/down).
+     * If a cascade group already exists:
+     *   - If this window is already the frontmost member, cycle it to the back (next member becomes front).
+     *   - If this window is a background member, promote it to the front.
      */
     startCascade() {
         debug("startCascade method triggered for", this.getCaption());
 
         const myKey = this.window.interstitia_cascadeSlotKey;
         if (myKey && coordinator.cascadeGroups.has(myKey)) {
-            // Group already exists — re-cascade placing this window on top.
-            debug("startCascade: group already exists for", myKey, "— re-cascading with active on top");
-            TileableWindow.reapplyCascade(myKey, this.window.internalId);
+            const group = coordinator.cascadeGroups.get(myKey);
+            const frontId = group.members[group.members.length - 1];
+
+            if (this.window.internalId === frontId) {
+                // Active window is already at the front — cycle it to the back.
+                debug("startCascade: active is already front, cycling group", myKey);
+                TileableWindow.cycleCascade(myKey);
+            } else {
+                // Active window is a background member — promote it to the front.
+                debug("startCascade: promoting background member to front for group", myKey);
+                TileableWindow.reapplyCascade(myKey, this.window.internalId);
+            }
             return;
         }
 
