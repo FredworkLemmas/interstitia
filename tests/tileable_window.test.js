@@ -53,6 +53,8 @@ describe("TileableWindow Class", () => {
             fullScreen: false,
             minimized: false,
             onAllDesktops: false,
+            isInteractiveResize: false,
+            isInteractiveMove: true,
             interactiveMoveResizeStarted: { connect: jest.fn() },
             interactiveMoveResizeFinished: { connect: jest.fn() },
             moveResizedChanged: { connect: jest.fn() },
@@ -273,5 +275,55 @@ describe("TileableWindow Class", () => {
 
         expect(TileableWindow.overlapHor(win1, win3)).toBe(false);
         expect(TileableWindow.overlapVer(win1, win3)).toBe(false);
+    });
+
+    describe("resize vs. move drag detection", () => {
+        let tw;
+        let startHandler;
+        let finishHandler;
+
+        beforeEach(() => {
+            coordinator.mouseDragOrResizeInProgress = false;
+            coordinator.resizingWindowId = null;
+            TileableWindow._instances.clear();
+            tw = TileableWindow.get(mockWindow);
+            tw.setupMouseDragTracking();
+            startHandler = mockWindow.interactiveMoveResizeStarted.connect.mock.calls[0][0];
+            finishHandler = mockWindow.interactiveMoveResizeFinished.connect.mock.calls[0][0];
+        });
+
+        test("resize drag sets resizingWindowId, not mouseDragOrResizeInProgress", () => {
+            mockWindow.isInteractiveResize = true;
+            mockWindow.isInteractiveMove = false;
+            startHandler();
+            expect(coordinator.resizingWindowId).toBe(mockWindow.internalId);
+            expect(coordinator.mouseDragOrResizeInProgress).toBe(false);
+        });
+
+        test("move drag sets mouseDragOrResizeInProgress, not resizingWindowId", () => {
+            mockWindow.isInteractiveResize = false;
+            mockWindow.isInteractiveMove = true;
+            startHandler();
+            expect(coordinator.mouseDragOrResizeInProgress).toBe(true);
+            expect(coordinator.resizingWindowId).toBeNull();
+        });
+
+        test("finish clears resizingWindowId", () => {
+            mockWindow.isInteractiveResize = true;
+            mockWindow.isInteractiveMove = false;
+            mockWindow.quickTileMode = 0;
+            startHandler();
+            finishHandler();
+            expect(coordinator.resizingWindowId).toBeNull();
+        });
+
+        test("finish clears mouseDragOrResizeInProgress", () => {
+            mockWindow.isInteractiveResize = false;
+            mockWindow.isInteractiveMove = true;
+            mockWindow.quickTileMode = 0;
+            startHandler();
+            finishHandler();
+            expect(coordinator.mouseDragOrResizeInProgress).toBe(false);
+        });
     });
 });

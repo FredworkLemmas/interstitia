@@ -17,6 +17,8 @@ class WindowCoordinator {
         this.block = false;
         /** @type {boolean} Tracks if the user is currently dragging or resizing a window. */
         this.mouseDragOrResizeInProgress = false;
+        /** @type {string|null} The internalId of the window currently being interactively resized, or null. */
+        this.resizingWindowId = null;
         /**
          * Central cascade registry.
          * Map<slotKey, { slotGeometry: TileableWindowGeometry, members: string[], output }>
@@ -844,7 +846,15 @@ class TileableWindow {
     setupMouseDragTracking() {
         this.window.interactiveMoveResizeStarted.connect(() => {
             debug("interactive move/resize started (mouse drag detected)", this.getCaption());
-            coordinator.mouseDragOrResizeInProgress = true;
+            const isResize = !!this.window.isInteractiveResize;
+            if (isResize) {
+                coordinator.resizingWindowId = this.window.internalId;
+                debug("drag start: resize detected, tracking window", this.window.internalId);
+            } else {
+                coordinator.mouseDragOrResizeInProgress = true;
+                debug("drag start: move detected, blocking all gap application");
+            }
+            this._dragWasResize = isResize;
             // Record geometry and tile state before Plasma restores the floating size.
             this._dragStartGeometry = new TileableWindowGeometry(this.window.frameGeometry);
             this._dragStartWasTiled = this.window.quickTileMode !== 0;
@@ -860,6 +870,7 @@ class TileableWindow {
         this.window.interactiveMoveResizeFinished.connect(() => {
             debug("interactive move/resize finished (mouse drag ended)", this.getCaption());
             coordinator.mouseDragOrResizeInProgress = false;
+            coordinator.resizingWindowId = null;
             // If the window was tiled before the drag and KDE did not re-tile it at the
             // drop target, restore its tiled dimensions at the drop position before applying
             // gaps. If quickTileMode !== 0, KDE already committed a new tile slot — leave
