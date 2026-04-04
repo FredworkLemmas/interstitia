@@ -23,93 +23,23 @@ const config = { includeMaximized: false, excludeMode: true, includeMode: false,
  * @returns {any} The configuration value.
  */
 function readConfigValue(key, defaultValue) {
-    var val = defaultValue;
-    var source = "default";
-
     try {
         if (typeof readConfig === "function") {
-            // Standard KWin Scripting API
-            // Try Script-interstitia specifically (this matches our main.xml group)
-            var gVal = readConfig(key, "MISSING", "Script-interstitia");
-            if (gVal !== "MISSING" && gVal !== undefined) {
-                val = gVal;
-                source = "readConfig(Script-interstitia)";
-            } else {
-                // Try no group (base section)
-                gVal = readConfig(key, "MISSING");
-                if (gVal !== "MISSING" && gVal !== undefined) {
-                    val = gVal;
-                    source = "readConfig(no-group)";
-                } else {
-                    // Try with General prefix (old Plasma 6 style or from main.xml group)
-                    gVal = readConfig("General/" + key, "MISSING");
-                    if (gVal !== "MISSING" && gVal !== undefined) {
-                        val = gVal;
-                        source = "readConfig(General/key)";
-                    } else {
-                        // Try [General] group
-                        gVal = readConfig(key, "MISSING", "General");
-                        if (gVal !== "MISSING" && gVal !== undefined) {
-                            val = gVal;
-                            source = "readConfig(General)";
-                        } else {
-                            // Try [Script-interstitia][General]
-                            gVal = readConfig(key, "MISSING", "Script-interstitia", "General");
-                            if (gVal !== "MISSING" && gVal !== undefined) {
-                                val = gVal;
-                                source = "readConfig(General in Script-interstitia)";
-                            }
-                        }
-                    }
+            var val = readConfig(key, "MISSING", "Script-interstitia");
+            if (val !== "MISSING" && val !== undefined) {
+                if (typeof debugMode !== "undefined" && debugMode) {
+                    console.log("interstitia: CONFIG_CHECK [" + key + "] = " + val);
                 }
+                return val;
             }
-        } else if (typeof KWin !== "undefined" && typeof KWin.readConfig === "function") {
-            // KWin.readConfig API
-            // Try Script-interstitia
-            var gVal = KWin.readConfig(key, "MISSING", "Script-interstitia");
-            if (gVal !== "MISSING" && gVal !== undefined) {
-                val = gVal;
-                source = "KWin.readConfig(Script-interstitia)";
-            } else {
-                // Try no group first
-                gVal = KWin.readConfig(key, "MISSING");
-                if (gVal !== "MISSING" && gVal !== undefined) {
-                    val = gVal;
-                    source = "KWin.readConfig(no-group)";
-                } else {
-                    // Try with prefix
-                    gVal = KWin.readConfig("General/" + key, "MISSING");
-                    if (gVal !== "MISSING" && gVal !== undefined) {
-                        val = gVal;
-                        source = "KWin.readConfig(General/key)";
-                    } else {
-                        gVal = KWin.readConfig(key, "MISSING", "General");
-                        if (gVal !== "MISSING" && gVal !== undefined) {
-                            val = gVal;
-                            source = "KWin.readConfig(General)";
-                        } else {
-                            gVal = KWin.readConfig(key, "MISSING", "Script-interstitia", "General");
-                            if (gVal !== "MISSING" && gVal !== undefined) {
-                                val = gVal;
-                                source = "KWin.readConfig(General in Script-interstitia)";
-                            }
-                        }
-                    }
-                }
-            }
-        } else if (typeof options !== "undefined" && options[key] !== undefined) {
-            val = options[key];
-            source = "options";
         }
     } catch (e) {
         console.log("interstitia: error reading config key " + key + ": " + e);
     }
-
-    // Check if debugMode is defined before using it (it's loaded first)
     if (typeof debugMode !== "undefined" && debugMode) {
-        console.log("interstitia: CONFIG_CHECK [" + key + "] = " + val + " (" + source + ")");
+        console.log("interstitia: CONFIG_CHECK [" + key + "] = " + defaultValue + " (default)");
     }
-    return val;
+    return defaultValue;
 }
 
 /**
