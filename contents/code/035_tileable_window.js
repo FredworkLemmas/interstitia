@@ -624,7 +624,7 @@ class TileableWindow {
 
             for (const c of workspace.windowList()) {
                 if (c.internalId in clientGeometries && c.frameGeometry &&
-                    !new TileableWindowGeometry(c.frameGeometry).equals(clientGeometries[c.internalId])) {
+                    !new TileableWindowGeometry(c.frameGeometry).nearlyEquals(clientGeometries[c.internalId], 1)) {
                     debug("set geometry", TileableWindow.get(c).getCaption(), new TileableWindowGeometry(clientGeometries[c.internalId]).toString());
                     c.frameGeometry = clientGeometries[c.internalId];
                 }
@@ -860,9 +860,11 @@ class TileableWindow {
         this.window.interactiveMoveResizeFinished.connect(() => {
             debug("interactive move/resize finished (mouse drag ended)", this.getCaption());
             coordinator.mouseDragOrResizeInProgress = false;
-            // If the window was tiled before the drag, restore its tiled dimensions
-            // at the drop position before applying gaps.
-            if (this._dragStartWasTiled && this._dragStartGeometry) {
+            // If the window was tiled before the drag and KDE did not re-tile it at the
+            // drop target, restore its tiled dimensions at the drop position before applying
+            // gaps. If quickTileMode !== 0, KDE already committed a new tile slot — leave
+            // the geometry alone so the corner-drop tiling actually takes effect.
+            if (this._dragStartWasTiled && this._dragStartGeometry && this.window.quickTileMode === 0) {
                 const dropGeo = this.window.frameGeometry;
                 debug("drag end: restoring tiled dimensions", this._dragStartGeometry.width, "x", this._dragStartGeometry.height, "at", dropGeo.x, dropGeo.y);
                 this.window.frameGeometry = {
