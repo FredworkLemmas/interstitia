@@ -326,4 +326,105 @@ describe("TileableWindow Class", () => {
             expect(coordinator.mouseDragOrResizeInProgress).toBe(false);
         });
     });
+
+    describe("applyGaps suppression during resize", () => {
+        let tw;
+
+        beforeEach(() => {
+            coordinator.mouseDragOrResizeInProgress = false;
+            coordinator.resizingWindowId = null;
+            coordinator.block = false;
+            TileableWindow._instances.clear();
+            mockWindow.quickTileMode = 0;
+            mockWindow.frameGeometry = { x: 8, y: 8, width: 942, height: 1064 };
+            workspace.windowList.mockReturnValue([mockWindow]);
+            workspace.clientArea.mockReturnValue({ x: 0, y: 0, width: 1920, height: 1080, left: 0, top: 0, right: 1920, bottom: 1080 });
+            global.gap = { left: 8, right: 8, top: 8, bottom: 8, mid: 8 };
+        });
+
+        test("applyGaps returns early when this window is being resized", () => {
+            coordinator.resizingWindowId = mockWindow.internalId;
+            tw = TileableWindow.get(mockWindow);
+            jest.spyOn(tw, 'applyGapsArea');
+            tw.applyGaps();
+            expect(tw.applyGapsArea).not.toHaveBeenCalled();
+        });
+
+        test("applyGaps does NOT return early for a different window during a resize", () => {
+            const otherWindow = {
+                internalId: "other-win",
+                caption: "Other",
+                output: 0,
+                desktops: [1],
+                activities: ["act-1"],
+                frameGeometry: { x: 958, y: 8, width: 954, height: 1064 },
+                normalWindow: true,
+                resizeable: true,
+                fullScreen: false,
+                minimized: false,
+                onAllDesktops: false,
+                quickTileMode: 0,
+                interactiveMoveResizeStarted: { connect: jest.fn() },
+                interactiveMoveResizeFinished: { connect: jest.fn() },
+                moveResizedChanged: { connect: jest.fn() },
+                frameGeometryChanged: { connect: jest.fn() },
+                fullScreenChanged: { connect: jest.fn() },
+                maximizedChanged: { connect: jest.fn() },
+                minimizedChanged: { connect: jest.fn() },
+                quickTileModeChanged: { connect: jest.fn() },
+                tileChanged: { connect: jest.fn() },
+                desktopsChanged: { connect: jest.fn() },
+                activitiesChanged: { connect: jest.fn() },
+            };
+            // mockWindow is being resized; otherWindow is the neighbor
+            coordinator.resizingWindowId = mockWindow.internalId;
+            workspace.windowList.mockReturnValue([mockWindow, otherWindow]);
+
+            const twOther = TileableWindow.get(otherWindow);
+            jest.spyOn(twOther, 'applyGapsArea');
+            twOther.applyGaps();
+            expect(twOther.applyGapsArea).toHaveBeenCalled();
+        });
+
+        test("geometry write loop does not write to the resized window", () => {
+            const otherWindow = {
+                internalId: "other-win",
+                caption: "Other",
+                output: 0,
+                desktops: [1],
+                activities: ["act-1"],
+                // otherWindow's left edge touches mockWindow's right (no gap)
+                frameGeometry: { x: 950, y: 8, width: 962, height: 1064 },
+                normalWindow: true,
+                resizeable: true,
+                fullScreen: false,
+                minimized: false,
+                onAllDesktops: false,
+                quickTileMode: 0,
+                interactiveMoveResizeStarted: { connect: jest.fn() },
+                interactiveMoveResizeFinished: { connect: jest.fn() },
+                moveResizedChanged: { connect: jest.fn() },
+                frameGeometryChanged: { connect: jest.fn() },
+                fullScreenChanged: { connect: jest.fn() },
+                maximizedChanged: { connect: jest.fn() },
+                minimizedChanged: { connect: jest.fn() },
+                quickTileModeChanged: { connect: jest.fn() },
+                tileChanged: { connect: jest.fn() },
+                desktopsChanged: { connect: jest.fn() },
+                activitiesChanged: { connect: jest.fn() },
+            };
+            mockWindow.frameGeometry = { x: 8, y: 8, width: 942, height: 1064 };
+            coordinator.resizingWindowId = mockWindow.internalId;
+            workspace.windowList.mockReturnValue([mockWindow, otherWindow]);
+
+            const originalMockGeo = { ...mockWindow.frameGeometry };
+            const twOther = TileableWindow.get(otherWindow);
+            twOther.applyGaps();
+
+            // The resized window must NOT have had its frameGeometry written
+            expect(mockWindow.frameGeometry).toEqual(originalMockGeo);
+            // The neighbor's left edge should have moved right (gap inserted between them)
+            expect(otherWindow.frameGeometry.x).toBeGreaterThan(950);
+        });
+    });
 });

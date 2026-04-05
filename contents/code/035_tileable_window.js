@@ -596,7 +596,11 @@ class TileableWindow {
         }
 
         if (coordinator.mouseDragOrResizeInProgress) {
-            debug("applyGaps: skipping, drag/resize in progress", this.getCaption());
+            debug("applyGaps: skipping, move in progress", this.getCaption());
+            return;
+        }
+        if (coordinator.resizingWindowId === this.window.internalId) {
+            debug("applyGaps: skipping, this window is being resized", this.getCaption());
             return;
         }
 
@@ -627,6 +631,10 @@ class TileableWindow {
             for (const c of workspace.windowList()) {
                 if (c.internalId in clientGeometries && c.frameGeometry &&
                     !new TileableWindowGeometry(c.frameGeometry).nearlyEquals(clientGeometries[c.internalId], 1)) {
+                    if (coordinator.resizingWindowId && c.internalId === coordinator.resizingWindowId) {
+                        debug("set geometry: skipping resized window", TileableWindow.get(c).getCaption());
+                        continue;
+                    }
                     debug("set geometry", TileableWindow.get(c).getCaption(), new TileableWindowGeometry(clientGeometries[c.internalId]).toString());
                     c.frameGeometry = clientGeometries[c.internalId];
                 }
