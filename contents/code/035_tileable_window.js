@@ -877,13 +877,16 @@ class TileableWindow {
 
         this.window.interactiveMoveResizeFinished.connect(() => {
             debug("interactive move/resize finished (mouse drag ended)", this.getCaption());
+            const wasResize = this._dragWasResize;
+            this._dragWasResize = false;
             coordinator.mouseDragOrResizeInProgress = false;
             coordinator.resizingWindowId = null;
             // If the window was tiled before the drag and KDE did not re-tile it at the
             // drop target, restore its tiled dimensions at the drop position before applying
             // gaps. If quickTileMode !== 0, KDE already committed a new tile slot — leave
             // the geometry alone so the corner-drop tiling actually takes effect.
-            if (this._dragStartWasTiled && this._dragStartGeometry && this.window.quickTileMode === 0) {
+            // Skip this restore for border resizes: the new size IS the intended size.
+            if (!wasResize && this._dragStartWasTiled && this._dragStartGeometry && this.window.quickTileMode === 0) {
                 const dropGeo = this.window.frameGeometry;
                 debug("drag end: restoring tiled dimensions", this._dragStartGeometry.width, "x", this._dragStartGeometry.height, "at", dropGeo.x, dropGeo.y);
                 this.window.frameGeometry = {
@@ -902,7 +905,7 @@ class TileableWindow {
                 debug("drag end: joining cascade group", dropTarget);
                 TileableWindow.addToCascadeGroup(this, dropTarget);
             } else {
-                this.applyGaps();
+                TileableWindow.applyGapsAll();
             }
             this._dragStartCascadeKey = null;
         });

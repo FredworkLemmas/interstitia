@@ -327,6 +327,67 @@ describe("TileableWindow Class", () => {
         });
     });
 
+    describe("interactiveMoveResizeFinished — resize vs. move", () => {
+        let tw;
+        let startHandler;
+        let finishHandler;
+
+        beforeEach(() => {
+            global.gap = { left: 8, right: 8, top: 8, bottom: 8, mid: 8 };
+            coordinator.mouseDragOrResizeInProgress = false;
+            coordinator.resizingWindowId = null;
+            coordinator.block = false;
+            TileableWindow._instances.clear();
+            mockWindow.quickTileMode = 2; // was tiled (left half)
+            mockWindow.frameGeometry = { x: 8, y: 8, width: 942, height: 1064 };
+            mockWindow.isInteractiveResize = false;
+            mockWindow.isInteractiveMove = true;
+            tw = TileableWindow.get(mockWindow);
+            tw.setupMouseDragTracking();
+            startHandler = mockWindow.interactiveMoveResizeStarted.connect.mock.calls[0][0];
+            finishHandler = mockWindow.interactiveMoveResizeFinished.connect.mock.calls[0][0];
+            jest.spyOn(TileableWindow, 'applyGapsAll').mockImplementation(() => {});
+        });
+
+        afterEach(() => {
+            jest.restoreAllMocks();
+        });
+
+        test("resize: does NOT restore pre-drag dimensions when quickTileMode becomes 0", () => {
+            mockWindow.isInteractiveResize = true;
+            mockWindow.isInteractiveMove = false;
+            startHandler();
+            // Simulate resize: window is now wider, quickTileMode cleared by KDE
+            mockWindow.frameGeometry = { x: 8, y: 8, width: 1300, height: 1064 };
+            mockWindow.quickTileMode = 0;
+            finishHandler();
+            // Width should NOT have been restored to the pre-drag 942
+            expect(mockWindow.frameGeometry.width).toBe(1300);
+        });
+
+        test("resize: calls applyGapsAll after release", () => {
+            mockWindow.isInteractiveResize = true;
+            mockWindow.isInteractiveMove = false;
+            startHandler();
+            mockWindow.frameGeometry = { x: 8, y: 8, width: 1300, height: 1064 };
+            mockWindow.quickTileMode = 0;
+            finishHandler();
+            expect(TileableWindow.applyGapsAll).toHaveBeenCalled();
+        });
+
+        test("move: still restores pre-drag dimensions when quickTileMode becomes 0", () => {
+            mockWindow.isInteractiveResize = false;
+            mockWindow.isInteractiveMove = true;
+            startHandler();
+            // Simulate move: window dropped at new position, quickTileMode becomes 0
+            mockWindow.frameGeometry = { x: 400, y: 8, width: 942, height: 1064 };
+            mockWindow.quickTileMode = 0;
+            finishHandler();
+            // Width should remain 942 (original tiled width restored at drop position)
+            expect(mockWindow.frameGeometry.width).toBe(942);
+        });
+    });
+
     describe("applyGaps suppression during resize", () => {
         let tw;
 
