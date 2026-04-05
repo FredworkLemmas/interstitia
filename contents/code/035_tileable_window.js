@@ -139,9 +139,7 @@ class TileableWindow {
      * Apply gaps to all existing windows.
      */
     static applyGapsAll() {
-        if (typeof console !== "undefined") {
-            console.log("interstitia: applyGapsAll triggered");
-        }
+        debug("applyGapsAll triggered");
         const allWindows = workspace.windowList ? workspace.windowList() : workspace.clientList();
         allWindows.forEach((client) => TileableWindow.get(client).applyGaps());
     }
@@ -631,6 +629,10 @@ class TileableWindow {
             for (const c of workspace.windowList()) {
                 if (c.internalId in clientGeometries && c.frameGeometry &&
                     !new TileableWindowGeometry(c.frameGeometry).nearlyEquals(clientGeometries[c.internalId], 1)) {
+                    // Skip writing back to the window being border-resized — its geometry is
+                    // live (controlled by the cursor). applyGapsWindows may have mutated its
+                    // clientGeometries entry, but applyGapsAll() on release re-snaps from the
+                    // final committed geometry.
                     if (coordinator.resizingWindowId && c.internalId === coordinator.resizingWindowId) {
                         debug("set geometry: skipping resized window", TileableWindow.get(c).getCaption());
                         continue;
