@@ -292,12 +292,14 @@ describe("TileableWindow Class", () => {
             finishHandler = mockWindow.interactiveMoveResizeFinished.connect.mock.calls[0][0];
         });
 
-        test("resize drag sets resizingWindowId, not mouseDragOrResizeInProgress", () => {
+        test("resize drag sets resizingWindowId AND mouseDragOrResizeInProgress", () => {
             mockWindow.isInteractiveResize = true;
             mockWindow.isInteractiveMove = false;
             startHandler();
             expect(coordinator.resizingWindowId).toBe(mockWindow.internalId);
-            expect(coordinator.mouseDragOrResizeInProgress).toBe(false);
+            // mouseDragOrResizeInProgress must also be set during resize to suppress all
+            // applyGaps calls and prevent gap-fighting with KDE's continuous resize updates.
+            expect(coordinator.mouseDragOrResizeInProgress).toBe(true);
         });
 
         test("move drag sets mouseDragOrResizeInProgress, not resizingWindowId", () => {

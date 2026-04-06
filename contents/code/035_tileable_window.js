@@ -857,20 +857,24 @@ class TileableWindow {
         this.window.interactiveMoveResizeStarted.connect(() => {
             debug("interactive move/resize started (mouse drag detected)", this.getCaption());
             const isResize = !!this.window.isInteractiveResize;
+            // Always suppress gap application during any drag/resize to avoid fighting KDE's
+            // continuous geometry updates. For resizes, also record resizingWindowId so the
+            // release handler can skip dimension-restore (Bug B fix).
+            coordinator.mouseDragOrResizeInProgress = true;
             if (isResize) {
                 coordinator.resizingWindowId = this.window.internalId;
-                debug("drag start: resize detected, tracking window", this.window.internalId);
+                debug("drag start: resize detected");
             } else {
-                coordinator.mouseDragOrResizeInProgress = true;
-                debug("drag start: move detected, blocking all gap application");
+                debug("drag start: move detected");
             }
             this._dragWasResize = isResize;
             // Record geometry and tile state before Plasma restores the floating size.
             this._dragStartGeometry = new TileableWindowGeometry(this.window.frameGeometry);
             this._dragStartWasTiled = this.window.quickTileMode !== 0;
-            // Leave cascade group on drag start.
+            // Leave cascade group on drag start — but NOT for resizes. A resize keeps the
+            // window in its tile slot; the cascade is slot-based and should survive a resize.
             this._dragStartCascadeKey = this.window.interstitia_cascadeSlotKey || null;
-            if (this._dragStartCascadeKey) {
+            if (this._dragStartCascadeKey && !isResize) {
                 debug("drag start: leaving cascade group", this._dragStartCascadeKey);
                 TileableWindow.removeFromCascadeGroup(this, this._dragStartCascadeKey);
             }
