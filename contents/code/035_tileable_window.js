@@ -17,6 +17,8 @@ class WindowCoordinator {
         this.block = false;
         /** @type {boolean} Tracks if the user is currently dragging or resizing a window. */
         this.mouseDragOrResizeInProgress = false;
+        /** @type {string|null} The internalId of the window currently being interactively resized, or null. */
+        this.resizingWindowId = null;
         /**
          * Central cascade registry.
          * Map<slotKey, { slotGeometry: TileableWindowGeometry, members: string[], output }>
@@ -137,9 +139,7 @@ class TileableWindow {
      * Apply gaps to all existing windows.
      */
     static applyGapsAll() {
-        if (typeof console !== "undefined") {
-            console.log("interstitia: applyGapsAll triggered");
-        }
+        debug("applyGapsAll triggered");
         const allWindows = workspace.windowList ? workspace.windowList() : workspace.clientList();
         allWindows.forEach((client) => TileableWindow.get(client).applyGaps());
     }
@@ -594,7 +594,11 @@ class TileableWindow {
         }
 
         if (coordinator.mouseDragOrResizeInProgress) {
-            debug("applyGaps: skipping, drag/resize in progress", this.getCaption());
+            debug("applyGaps: skipping, move in progress", this.getCaption());
+            return;
+        }
+        if (coordinator.resizingWindowId === this.window.internalId) {
+            debug("applyGaps: skipping, this window is being resized", this.getCaption());
             return;
         }
 
@@ -625,6 +629,14 @@ class TileableWindow {
             for (const c of workspace.windowList()) {
                 if (c.internalId in clientGeometries && c.frameGeometry &&
                     !new TileableWindowGeometry(c.frameGeometry).nearlyEquals(clientGeometries[c.internalId], 1)) {
+                    // Skip writing back to the window being border-resized — its geometry is
+                    // live (controlled by the cursor). applyGapsWindows may have mutated its
+                    // clientGeometries entry, but applyGapsAll() on release re-snaps from the
+                    // final committed geometry.
+                    if (coordinator.resizingWindowId && c.internalId === coordinator.resizingWindowId) {
+                        debug("set geometry: skipping resized window", TileableWindow.get(c).getCaption());
+                        continue;
+                    }
                     debug("set geometry", TileableWindow.get(c).getCaption(), new TileableWindowGeometry(clientGeometries[c.internalId]).toString());
                     c.frameGeometry = clientGeometries[c.internalId];
                 }
@@ -844,13 +856,25 @@ class TileableWindow {
     setupMouseDragTracking() {
         this.window.interactiveMoveResizeStarted.connect(() => {
             debug("interactive move/resize started (mouse drag detected)", this.getCaption());
+            const isResize = !!this.window.isInteractiveResize;
+            // Always suppress gap application during any drag/resize to avoid fighting KDE's
+            // continuous geometry updates. For resizes, also record resizingWindowId so the
+            // release handler can skip dimension-restore (Bug B fix).
             coordinator.mouseDragOrResizeInProgress = true;
+            if (isResize) {
+                coordinator.resizingWindowId = this.window.internalId;
+                debug("drag start: resize detected");
+            } else {
+                debug("drag start: move detected");
+            }
+            this._dragWasResize = isResize;
             // Record geometry and tile state before Plasma restores the floating size.
             this._dragStartGeometry = new TileableWindowGeometry(this.window.frameGeometry);
             this._dragStartWasTiled = this.window.quickTileMode !== 0;
-            // Leave cascade group on drag start.
+            // Leave cascade group on drag start — but NOT for resizes. A resize keeps the
+            // window in its tile slot; the cascade is slot-based and should survive a resize.
             this._dragStartCascadeKey = this.window.interstitia_cascadeSlotKey || null;
-            if (this._dragStartCascadeKey) {
+            if (this._dragStartCascadeKey && !isResize) {
                 debug("drag start: leaving cascade group", this._dragStartCascadeKey);
                 TileableWindow.removeFromCascadeGroup(this, this._dragStartCascadeKey);
             }
@@ -859,12 +883,16 @@ class TileableWindow {
 
         this.window.interactiveMoveResizeFinished.connect(() => {
             debug("interactive move/resize finished (mouse drag ended)", this.getCaption());
+            const wasResize = this._dragWasResize;
+            this._dragWasResize = false;
             coordinator.mouseDragOrResizeInProgress = false;
+            coordinator.resizingWindowId = null;
             // If the window was tiled before the drag and KDE did not re-tile it at the
             // drop target, restore its tiled dimensions at the drop position before applying
             // gaps. If quickTileMode !== 0, KDE already committed a new tile slot — leave
             // the geometry alone so the corner-drop tiling actually takes effect.
-            if (this._dragStartWasTiled && this._dragStartGeometry && this.window.quickTileMode === 0) {
+            // Skip this restore for border resizes: the new size IS the intended size.
+            if (!wasResize && this._dragStartWasTiled && this._dragStartGeometry && this.window.quickTileMode === 0) {
                 const dropGeo = this.window.frameGeometry;
                 debug("drag end: restoring tiled dimensions", this._dragStartGeometry.width, "x", this._dragStartGeometry.height, "at", dropGeo.x, dropGeo.y);
                 this.window.frameGeometry = {
@@ -883,7 +911,7 @@ class TileableWindow {
                 debug("drag end: joining cascade group", dropTarget);
                 TileableWindow.addToCascadeGroup(this, dropTarget);
             } else {
-                this.applyGaps();
+                TileableWindow.applyGapsAll();
             }
             this._dragStartCascadeKey = null;
         });

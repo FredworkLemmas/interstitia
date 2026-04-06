@@ -53,6 +53,8 @@ describe("TileableWindow Class", () => {
             fullScreen: false,
             minimized: false,
             onAllDesktops: false,
+            isInteractiveResize: false,
+            isInteractiveMove: true,
             interactiveMoveResizeStarted: { connect: jest.fn() },
             interactiveMoveResizeFinished: { connect: jest.fn() },
             moveResizedChanged: { connect: jest.fn() },
@@ -273,5 +275,219 @@ describe("TileableWindow Class", () => {
 
         expect(TileableWindow.overlapHor(win1, win3)).toBe(false);
         expect(TileableWindow.overlapVer(win1, win3)).toBe(false);
+    });
+
+    describe("resize vs. move drag detection", () => {
+        let tw;
+        let startHandler;
+        let finishHandler;
+
+        beforeEach(() => {
+            coordinator.mouseDragOrResizeInProgress = false;
+            coordinator.resizingWindowId = null;
+            TileableWindow._instances.clear();
+            tw = TileableWindow.get(mockWindow);
+            tw.setupMouseDragTracking();
+            startHandler = mockWindow.interactiveMoveResizeStarted.connect.mock.calls[0][0];
+            finishHandler = mockWindow.interactiveMoveResizeFinished.connect.mock.calls[0][0];
+        });
+
+        test("resize drag sets resizingWindowId AND mouseDragOrResizeInProgress", () => {
+            mockWindow.isInteractiveResize = true;
+            mockWindow.isInteractiveMove = false;
+            startHandler();
+            expect(coordinator.resizingWindowId).toBe(mockWindow.internalId);
+            // mouseDragOrResizeInProgress must also be set during resize to suppress all
+            // applyGaps calls and prevent gap-fighting with KDE's continuous resize updates.
+            expect(coordinator.mouseDragOrResizeInProgress).toBe(true);
+        });
+
+        test("move drag sets mouseDragOrResizeInProgress, not resizingWindowId", () => {
+            mockWindow.isInteractiveResize = false;
+            mockWindow.isInteractiveMove = true;
+            startHandler();
+            expect(coordinator.mouseDragOrResizeInProgress).toBe(true);
+            expect(coordinator.resizingWindowId).toBeNull();
+        });
+
+        test("finish clears resizingWindowId", () => {
+            mockWindow.isInteractiveResize = true;
+            mockWindow.isInteractiveMove = false;
+            mockWindow.quickTileMode = 0;
+            startHandler();
+            finishHandler();
+            expect(coordinator.resizingWindowId).toBeNull();
+        });
+
+        test("finish clears mouseDragOrResizeInProgress", () => {
+            mockWindow.isInteractiveResize = false;
+            mockWindow.isInteractiveMove = true;
+            mockWindow.quickTileMode = 0;
+            startHandler();
+            finishHandler();
+            expect(coordinator.mouseDragOrResizeInProgress).toBe(false);
+        });
+    });
+
+    describe("interactiveMoveResizeFinished — resize vs. move", () => {
+        let tw;
+        let startHandler;
+        let finishHandler;
+
+        beforeEach(() => {
+            global.gap = { left: 8, right: 8, top: 8, bottom: 8, mid: 8 };
+            coordinator.mouseDragOrResizeInProgress = false;
+            coordinator.resizingWindowId = null;
+            coordinator.block = false;
+            TileableWindow._instances.clear();
+            mockWindow.quickTileMode = 2; // was tiled (left half)
+            mockWindow.frameGeometry = { x: 8, y: 8, width: 942, height: 1064 };
+            mockWindow.isInteractiveResize = false;
+            mockWindow.isInteractiveMove = true;
+            tw = TileableWindow.get(mockWindow);
+            tw.setupMouseDragTracking();
+            startHandler = mockWindow.interactiveMoveResizeStarted.connect.mock.calls[0][0];
+            finishHandler = mockWindow.interactiveMoveResizeFinished.connect.mock.calls[0][0];
+            jest.spyOn(TileableWindow, 'applyGapsAll').mockImplementation(() => {});
+        });
+
+        afterEach(() => {
+            jest.restoreAllMocks();
+        });
+
+        test("resize: does NOT restore pre-drag dimensions when quickTileMode becomes 0", () => {
+            mockWindow.isInteractiveResize = true;
+            mockWindow.isInteractiveMove = false;
+            startHandler();
+            // Simulate resize: window is now wider, quickTileMode cleared by KDE
+            mockWindow.frameGeometry = { x: 8, y: 8, width: 1300, height: 1064 };
+            mockWindow.quickTileMode = 0;
+            finishHandler();
+            // Width should NOT have been restored to the pre-drag 942
+            expect(mockWindow.frameGeometry.width).toBe(1300);
+        });
+
+        test("resize: calls applyGapsAll after release", () => {
+            mockWindow.isInteractiveResize = true;
+            mockWindow.isInteractiveMove = false;
+            startHandler();
+            mockWindow.frameGeometry = { x: 8, y: 8, width: 1300, height: 1064 };
+            mockWindow.quickTileMode = 0;
+            finishHandler();
+            expect(TileableWindow.applyGapsAll).toHaveBeenCalled();
+        });
+
+        test("move: still restores pre-drag dimensions when quickTileMode becomes 0", () => {
+            mockWindow.isInteractiveResize = false;
+            mockWindow.isInteractiveMove = true;
+            startHandler();
+            // Simulate move: window dropped at new position, quickTileMode becomes 0
+            mockWindow.frameGeometry = { x: 400, y: 8, width: 942, height: 1064 };
+            mockWindow.quickTileMode = 0;
+            finishHandler();
+            // Width should remain 942 (original tiled width restored at drop position)
+            expect(mockWindow.frameGeometry.width).toBe(942);
+        });
+    });
+
+    describe("applyGaps suppression during resize", () => {
+        let tw;
+
+        beforeEach(() => {
+            coordinator.mouseDragOrResizeInProgress = false;
+            coordinator.resizingWindowId = null;
+            coordinator.block = false;
+            TileableWindow._instances.clear();
+            mockWindow.quickTileMode = 0;
+            mockWindow.frameGeometry = { x: 8, y: 8, width: 942, height: 1064 };
+            workspace.windowList.mockReturnValue([mockWindow]);
+            workspace.clientArea.mockReturnValue({ x: 0, y: 0, width: 1920, height: 1080, left: 0, top: 0, right: 1920, bottom: 1080 });
+            global.gap = { left: 8, right: 8, top: 8, bottom: 8, mid: 8 };
+        });
+
+        test("applyGaps returns early when this window is being resized", () => {
+            coordinator.resizingWindowId = mockWindow.internalId;
+            tw = TileableWindow.get(mockWindow);
+            jest.spyOn(tw, 'applyGapsArea');
+            tw.applyGaps();
+            expect(tw.applyGapsArea).not.toHaveBeenCalled();
+        });
+
+        test("applyGaps does NOT return early for a different window during a resize", () => {
+            const otherWindow = {
+                internalId: "other-win",
+                caption: "Other",
+                output: 0,
+                desktops: [1],
+                activities: ["act-1"],
+                frameGeometry: { x: 958, y: 8, width: 954, height: 1064 },
+                normalWindow: true,
+                resizeable: true,
+                fullScreen: false,
+                minimized: false,
+                onAllDesktops: false,
+                quickTileMode: 0,
+                interactiveMoveResizeStarted: { connect: jest.fn() },
+                interactiveMoveResizeFinished: { connect: jest.fn() },
+                moveResizedChanged: { connect: jest.fn() },
+                frameGeometryChanged: { connect: jest.fn() },
+                fullScreenChanged: { connect: jest.fn() },
+                maximizedChanged: { connect: jest.fn() },
+                minimizedChanged: { connect: jest.fn() },
+                quickTileModeChanged: { connect: jest.fn() },
+                tileChanged: { connect: jest.fn() },
+                desktopsChanged: { connect: jest.fn() },
+                activitiesChanged: { connect: jest.fn() },
+            };
+            // mockWindow is being resized; otherWindow is the neighbor
+            coordinator.resizingWindowId = mockWindow.internalId;
+            workspace.windowList.mockReturnValue([mockWindow, otherWindow]);
+
+            const twOther = TileableWindow.get(otherWindow);
+            jest.spyOn(twOther, 'applyGapsArea');
+            twOther.applyGaps();
+            expect(twOther.applyGapsArea).toHaveBeenCalled();
+        });
+
+        test("geometry write loop does not write to the resized window", () => {
+            const otherWindow = {
+                internalId: "other-win",
+                caption: "Other",
+                output: 0,
+                desktops: [1],
+                activities: ["act-1"],
+                // otherWindow's left edge touches mockWindow's right (no gap)
+                frameGeometry: { x: 950, y: 8, width: 962, height: 1064 },
+                normalWindow: true,
+                resizeable: true,
+                fullScreen: false,
+                minimized: false,
+                onAllDesktops: false,
+                quickTileMode: 0,
+                interactiveMoveResizeStarted: { connect: jest.fn() },
+                interactiveMoveResizeFinished: { connect: jest.fn() },
+                moveResizedChanged: { connect: jest.fn() },
+                frameGeometryChanged: { connect: jest.fn() },
+                fullScreenChanged: { connect: jest.fn() },
+                maximizedChanged: { connect: jest.fn() },
+                minimizedChanged: { connect: jest.fn() },
+                quickTileModeChanged: { connect: jest.fn() },
+                tileChanged: { connect: jest.fn() },
+                desktopsChanged: { connect: jest.fn() },
+                activitiesChanged: { connect: jest.fn() },
+            };
+            mockWindow.frameGeometry = { x: 8, y: 8, width: 942, height: 1064 };
+            coordinator.resizingWindowId = mockWindow.internalId;
+            workspace.windowList.mockReturnValue([mockWindow, otherWindow]);
+
+            const originalMockGeo = { ...mockWindow.frameGeometry };
+            const twOther = TileableWindow.get(otherWindow);
+            twOther.applyGaps();
+
+            // The resized window must NOT have had its frameGeometry written
+            expect(mockWindow.frameGeometry).toEqual(originalMockGeo);
+            // The neighbor's left edge should have moved right (gap inserted between them)
+            expect(otherWindow.frameGeometry.x).toBeGreaterThan(950);
+        });
     });
 });
