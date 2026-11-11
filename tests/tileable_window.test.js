@@ -175,6 +175,35 @@ describe("TileableWindow Class", () => {
         expect(result.y).toBe(gap.top);
     });
 
+    test("applies edge gaps using a KWin work area with only rectangle coordinates", () => {
+        workspace.clientArea.mockReturnValue({ x: 100, y: 50, width: 1920, height: 1080 });
+        mockWindow.frameGeometry = { x: 100, y: 50, width: 960, height: 1080 };
+        coordinator.block = false;
+        coordinator.mouseDragOrResizeInProgress = false;
+        config.includeMaximized = false;
+        config.excludeMode = false;
+        config.includeMode = false;
+
+        TileableWindow.get(mockWindow).applyGaps();
+
+        expect(mockWindow.frameGeometry).toMatchObject({ x: 108, y: 58, width: 948, height: 1064 });
+    });
+
+    test("applies all edge gaps to maximized windows when enabled", () => {
+        workspace.clientArea.mockReturnValue({ x: 100, y: 50, width: 1920, height: 1080 });
+        mockWindow.frameGeometry = { x: 100, y: 50, width: 1920, height: 1080 };
+        coordinator.block = false;
+        coordinator.mouseDragOrResizeInProgress = false;
+        config.includeMaximized = true;
+        config.excludeMode = false;
+        config.includeMode = false;
+
+        TileableWindow.get(mockWindow).applyGaps();
+
+        expect(mockWindow.frameGeometry).toMatchObject({ x: 108, y: 58, width: 1904, height: 1064 });
+        config.includeMaximized = false;
+    });
+
     /**
      * This test demonstrates the initialize() method and trigger connection:
      * - It verifies that initialize connects all signals from getTriggers().
