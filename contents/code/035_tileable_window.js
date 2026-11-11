@@ -394,7 +394,9 @@ class TileableWindow {
      * @returns {object} Nested object with left, right, top, and bottom anchor definitions.
      */
     getGridAnchors() {
-        let area = this.getWorkArea();
+        // KWin exposes the work area as a QRect with x/y/width/height; do not
+        // depend on left/right/top/bottom being available as JS properties.
+        let area = new TileableWindowGeometry(this.getWorkArea());
         let unmaximized = !this.isMaximized();
         return {
             left: {
