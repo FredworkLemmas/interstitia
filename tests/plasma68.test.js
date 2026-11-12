@@ -118,3 +118,61 @@ describe("H8: KWin 6.8 rects without left/right/top/bottom", () => {
         expect(round(w.frameGeometry)).toEqual(GAPPED.left);
     });
 });
+
+describe("only tiled and maximized windows get gaps; neighbours are never resized (H4, H9)", () => {
+    const tileOf = (r) => ({ absoluteGeometry: { ...r } });
+
+    test("two quick-tiled halves get the middle gap from the half anchors alone", () => {
+        const l = makeWindow("kate", { x: 0, y: 0, width: 960, height: 1080 }, { tile: tileOf({ x: 0, y: 0, width: 960, height: 1080 }) });
+        const r = makeWindow("dolphin", { x: 960, y: 0, width: 960, height: 1080 }, { tile: tileOf({ x: 960, y: 0, width: 960, height: 1080 }) });
+        workspace.windowList.mockReturnValue([l, r]);
+
+        TileableWindow.get(l).applyGaps();
+        TileableWindow.get(r).applyGaps();
+
+        expect(round(l.frameGeometry)).toEqual(GAPPED.left);
+        expect(round(r.frameGeometry)).toEqual(GAPPED.right);
+    });
+
+    test("a maximized window gets its edge gaps", () => {
+        const w = makeWindow("kate", { ...AREA }, { maximizeMode: 3 });
+        workspace.windowList.mockReturnValue([w]);
+
+        TileableWindow.get(w).applyGaps();
+
+        expect(round(w.frameGeometry)).toEqual(GAPPED.maximize);
+    });
+
+    test("a floating window dropped 10 px from another changes neither window", () => {
+        const a = makeWindow("kate", { x: 300, y: 300, width: 600, height: 400 });
+        const b = makeWindow("dolphin", { x: 910, y: 300, width: 600, height: 400 });
+        workspace.windowList.mockReturnValue([a, b]);
+
+        TileableWindow.get(a).applyGaps();
+        TileableWindow.get(b).applyGaps();
+
+        expect(a.frameGeometry).toEqual({ x: 300, y: 300, width: 600, height: 400 });
+        expect(b.frameGeometry).toEqual({ x: 910, y: 300, width: 600, height: 400 });
+    });
+
+    test("a floating window whose edge sits near a quarter anchor is left alone", () => {
+        // Phase 0, scenario D with the H8 build: a floating Kate's bottom was pulled onto a quarter anchor.
+        const w = makeWindow("kate", { x: 1000, y: 32, width: 586, height: 790 });
+        workspace.windowList.mockReturnValue([w]);
+
+        TileableWindow.get(w).applyGaps();
+
+        expect(w.frameGeometry).toEqual({ x: 1000, y: 32, width: 586, height: 790 });
+    });
+
+    test("a tiled window next to a floating one never resizes the floating one", () => {
+        const t = makeWindow("kate", { x: 0, y: 0, width: 960, height: 1080 }, { tile: tileOf({ x: 0, y: 0, width: 960, height: 1080 }) });
+        const f = makeWindow("dolphin", { x: 970, y: 200, width: 500, height: 400 });
+        workspace.windowList.mockReturnValue([t, f]);
+
+        TileableWindow.get(t).applyGaps();
+
+        expect(round(t.frameGeometry)).toEqual(GAPPED.left);
+        expect(f.frameGeometry).toEqual({ x: 970, y: 200, width: 500, height: 400 });
+    });
+});

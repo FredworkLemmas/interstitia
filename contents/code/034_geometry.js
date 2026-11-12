@@ -31,47 +31,6 @@ class WindowGeometry {
     }
 
     /**
-     * Determine if a gap between two coordinates is near the expected gap.
-     * @param {number} v1
-     * @param {number} v2
-     * @param {number} gapSize
-     * @returns {boolean}
-     */
-    static nearWindow(v1, v2, gapSize) {
-        let tolerance = gapSize + 5;
-        let actualGap = Math.abs(v1 - v2);
-        return actualGap <= tolerance && Math.abs(actualGap - gapSize) > 1;
-    }
-
-    /**
-     * Horizontal overlap check with tolerance.
-     * @param {object} geo1
-     * @param {object} geo2
-     * @returns {boolean}
-     */
-    static overlapHor(geo1, geo2) {
-        let tolerance = 2 * gap.mid;
-        return (
-            (geo1.left <= geo2.left + tolerance && geo1.right > geo2.left + tolerance) ||
-            (geo2.left <= geo1.left + tolerance && geo2.right + tolerance > geo1.left)
-        );
-    }
-
-    /**
-     * Vertical overlap check with tolerance.
-     * @param {object} geo1
-     * @param {object} geo2
-     * @returns {boolean}
-     */
-    static overlapVer(geo1, geo2) {
-        let tolerance = 2 * gap.mid;
-        return (
-            (geo1.top <= geo2.top + tolerance && geo1.bottom > geo2.top + tolerance) ||
-            (geo2.top <= geo1.top + tolerance && geo2.bottom + tolerance > geo1.top)
-        );
-    }
-
-    /**
      * Produce a stable slot key string from a geometry object.
      * @param {object} geo
      * @returns {string}
