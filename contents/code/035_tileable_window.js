@@ -149,8 +149,26 @@ class BaseWindow {
     isTiledOrMaximized() {
         if (!this.window) return false;
         if (this.window.tile) return true;
-        if (this.window.maximizeMode !== undefined) return this.window.maximizeMode === 3;
+        // KWin restores a maximized window's geometry before it clears maximizeMode, so a
+        // maximized window only counts while its frame still covers the work area.
+        if (this.window.maximizeMode !== undefined) return this.window.maximizeMode === 3 && this.coversWorkArea();
         return this.isMaximized();
+    }
+
+    /**
+     * True when every edge of the frame is at the work area's edge, flush or gapped.
+     * @returns {boolean}
+     */
+    coversWorkArea() {
+        const f = this.geometry;
+        const a = new WindowGeometry(workspace.clientArea(KWin.MaximizeArea, this.window));
+        const slack = 5;
+        return (
+            Math.abs(f.left - a.left) <= gap.left + slack &&
+            Math.abs(a.right - f.right) <= gap.right + slack &&
+            Math.abs(f.top - a.top) <= gap.top + slack &&
+            Math.abs(a.bottom - f.bottom) <= gap.bottom + slack
+        );
     }
 
     /**

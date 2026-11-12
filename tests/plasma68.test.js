@@ -306,3 +306,32 @@ describe("drop behaviour: snap into a nearby quick-tile spot, otherwise change n
         expect(() => drag(w, { to: { x: 700, y: 400, width: 600, height: 400 } })).not.toThrow();
     });
 });
+
+describe("restoring from maximized (Phase 3, scenario M)", () => {
+    test("the restored floating geometry is left alone while maximizeMode is still 3", () => {
+        // KWin 6.8 emits frameGeometryChanged with the restore geometry before maximizeMode drops to 0.
+        const w = makeWindow("kate", { ...GAPPED.maximize }, { maximizeMode: 3 });
+        workspace.windowList.mockReturnValue([w]);
+        TileableWindow.get(w).initialize();
+
+        w.frameGeometry = { x: 0, y: 159, width: 586, height: 914 };
+        w.frameGeometryChanged.emit();
+        w.maximizeMode = 0;
+        w.maximizedChanged.emit();
+
+        expect(w.frameGeometry).toEqual({ x: 0, y: 159, width: 586, height: 914 });
+    });
+
+    test("a window KWin has just maximized (flush) still gets its gaps", () => {
+        const w = makeWindow("kate", { x: 0, y: 159, width: 586, height: 914 });
+        workspace.windowList.mockReturnValue([w]);
+        TileableWindow.get(w).initialize();
+
+        w.maximizeMode = 3;
+        w.frameGeometry = { ...AREA };
+        w.frameGeometryChanged.emit();
+        w.maximizedChanged.emit();
+
+        expect(round(w.frameGeometry)).toEqual(GAPPED.maximize);
+    });
+});
