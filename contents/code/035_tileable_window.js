@@ -336,7 +336,8 @@ class TileableWindow extends BaseWindow {
      * @returns {object} Nested object with left, right, top, and bottom anchor definitions.
      */
     getGridAnchors() {
-        let area = this.getWorkArea();
+        // KWin 6.8 hands scripts rects with only x/y/width/height; WindowGeometry adds the edges.
+        let area = new WindowGeometry(this.getWorkArea());
         let unmaximized = !this.isMaximized();
         return {
             left: {
