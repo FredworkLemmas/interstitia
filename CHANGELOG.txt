@@ -6,6 +6,16 @@
 - Border calculation tweaks to allow for better consistency across applications.
 - Updates to support Plasma 6.6
 
+[ 1.1.3 ]
+- Supports Plasma 6.8 (and still 6.5 to 6.7)
+- Fixed gaps no longer being applied under Plasma 6.8 (KWin 6.8 rectangles no longer expose left/right/top/bottom)
+- Fixed windows resizing themselves when placed near other windows: windows next to each other are no longer shrunk to make a gap; the gap between tiled windows comes from the tile positions
+- Only tiled and maximized windows get gaps; floating windows keep the size and position you give them
+- A floating window dropped close to a quick-tile spot, or against a screen edge, is now quick-tiled there with gaps; dropped anywhere else, it stays as dropped
+- Removed restoring a window's tiled size after it is dragged out of a tile (KWin 6.8 removed the quickTileMode it relied on)
+- Fixed a window restored from maximized having its restored size changed
+- Refactored the window classes (WindowGeometry, BaseWindow, TileableWindow, CascadeGroup)
+
 [ 1.1.1 ]
 - Fixed windows shrinking or vanishing while being dragged
 - Tiled windows now restore their tiled dimensions after being dragged and released
