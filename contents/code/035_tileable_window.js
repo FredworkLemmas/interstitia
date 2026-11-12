@@ -149,6 +149,8 @@ class BaseWindow {
     isTiledOrMaximized() {
         if (!this.window) return false;
         if (this.window.tile) return true;
+        // Before Plasma 6.8 a quick tile may show only in quickTileMode (gone in 6.8, so undefined there).
+        if (this.window.quickTileMode) return true;
         // KWin restores a maximized window's geometry before it clears maximizeMode, so a
         // maximized window only counts while its frame still covers the work area.
         if (this.window.maximizeMode !== undefined) return this.window.maximizeMode === 3 && this.coversWorkArea();
