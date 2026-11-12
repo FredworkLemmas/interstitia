@@ -101,7 +101,7 @@ describe("TileableWindow Class", () => {
     });
 
     /**
-     * This test demonstrates the applyGapsAll() static method:
+     * This test demonstrates the applyGapsAll() method:
      * - It should iterate through all windows and call applyGaps on their TileableWindow wrapper.
      */
     test("applyGapsAll iterates and applies gaps to all windows", () => {
@@ -115,7 +115,7 @@ describe("TileableWindow Class", () => {
         tw1.applyGaps = jest.fn();
         tw2.applyGaps = jest.fn();
 
-        TileableWindow.applyGapsAll();
+        coordinator.applyGapsAll();
 
         expect(tw1.applyGaps).toHaveBeenCalled();
         expect(tw2.applyGaps).toHaveBeenCalled();
@@ -166,7 +166,7 @@ describe("TileableWindow Class", () => {
         const tw = TileableWindow.get(mockWindow);
         // Position window near top-left corner
         mockWindow.frameGeometry = { x: 5, y: 5, width: 400, height: 300 };
-        const geoms = { [mockWindow.internalId]: new TileableWindowGeometry(mockWindow.frameGeometry) };
+        const geoms = { [mockWindow.internalId]: new WindowGeometry(mockWindow.frameGeometry) };
         
         tw.applyGapsArea(geoms);
         
@@ -224,15 +224,15 @@ describe("TileableWindow Class", () => {
     test("nearArea correctly identifies nearby coordinates", () => {
         const gapSize = 10;
         // Exact closed
-        expect(TileableWindow.nearArea(100, 100, 110, gapSize)).toBe(true);
+        expect(WindowGeometry.nearArea(100, 100, 110, gapSize)).toBe(true);
         // Within tolerance of closed
-        expect(TileableWindow.nearArea(105, 100, 110, gapSize)).toBe(true);
+        expect(WindowGeometry.nearArea(105, 100, 110, gapSize)).toBe(true);
         // Exact gapped
-        expect(TileableWindow.nearArea(110, 100, 110, gapSize)).toBe(true);
+        expect(WindowGeometry.nearArea(110, 100, 110, gapSize)).toBe(true);
         // Within tolerance of gapped
-        expect(TileableWindow.nearArea(120, 100, 110, gapSize)).toBe(true);
+        expect(WindowGeometry.nearArea(120, 100, 110, gapSize)).toBe(true);
         // Outside tolerance
-        expect(TileableWindow.nearArea(150, 100, 110, gapSize)).toBe(false);
+        expect(WindowGeometry.nearArea(150, 100, 110, gapSize)).toBe(false);
     });
 
     /**
@@ -247,16 +247,16 @@ describe("TileableWindow Class", () => {
         // So it returns false for EXACT gap? That seems intended to avoid "snapping" what is already snapped?
         
         // actualGap = 5, gapSize = 10. Math.abs(5 - 10) = 5. 5 > 1 is true. 5 <= 15 is true.
-        expect(TileableWindow.nearWindow(100, 105, gapSize)).toBe(true);
+        expect(WindowGeometry.nearWindow(100, 105, gapSize)).toBe(true);
         
         // actualGap = 10, gapSize = 10. Math.abs(0) > 1 is false.
-        expect(TileableWindow.nearWindow(100, 110, gapSize)).toBe(false);
+        expect(WindowGeometry.nearWindow(100, 110, gapSize)).toBe(false);
 
         // actualGap = 15, gapSize = 10. Math.abs(5) > 1 is true. 15 <= 15 is true.
-        expect(TileableWindow.nearWindow(100, 115, gapSize)).toBe(true);
+        expect(WindowGeometry.nearWindow(100, 115, gapSize)).toBe(true);
 
         // actualGap = 20, gapSize = 10. 20 > 15 is false.
-        expect(TileableWindow.nearWindow(100, 120, gapSize)).toBe(false);
+        expect(WindowGeometry.nearWindow(100, 120, gapSize)).toBe(false);
     });
 
     /**
@@ -268,10 +268,10 @@ describe("TileableWindow Class", () => {
         const win2 = { left: 50, right: 150, top: 50, bottom: 150 };
         const win3 = { left: 200, right: 300, top: 200, bottom: 300 };
 
-        expect(TileableWindow.overlapHor(win1, win2)).toBe(true);
-        expect(TileableWindow.overlapVer(win1, win2)).toBe(true);
+        expect(WindowGeometry.overlapHor(win1, win2)).toBe(true);
+        expect(WindowGeometry.overlapVer(win1, win2)).toBe(true);
 
-        expect(TileableWindow.overlapHor(win1, win3)).toBe(false);
-        expect(TileableWindow.overlapVer(win1, win3)).toBe(false);
+        expect(WindowGeometry.overlapHor(win1, win3)).toBe(false);
+        expect(WindowGeometry.overlapVer(win1, win3)).toBe(false);
     });
 });
