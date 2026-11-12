@@ -31,44 +31,60 @@ class WindowGeometry {
     }
 
     /**
-     * Determine if a gap between two coordinates is near the expected gap.
-     * @param {number} v1
-     * @param {number} v2
-     * @param {number} gapSize
-     * @returns {boolean}
+     * Choose the quick-tile spot a dropped floating window should go into, or null to leave it alone.
+     *
+     * 1. Lines up: every edge is within `threshold` of a candidate's edges, in either its gapped
+     *    or its closed (ungapped, as KWin places tiles) form. The closest such candidate wins.
+     * 2. Against a screen edge: otherwise, if any edge is within `threshold` of the work area's
+     *    edge (or past it), take the candidates touching every such edge and pick the one whose
+     *    gapped rect overlaps the window most (intersection over union).
+     *
+     * @param {object} frame - The window's frame, with left/right/top/bottom.
+     * @param {object} area - The work area, with left/right/top/bottom.
+     * @param {Array<{name: string, sides: string[], closed: object, gapped: object}>} candidates -
+     *     Tile spots; `sides` lists the screen edges each one touches, `closed`/`gapped` give edges.
+     * @param {number} threshold - Distance in px that still counts as close.
+     * @returns {string|null} The chosen candidate's name.
      */
-    static nearWindow(v1, v2, gapSize) {
-        let tolerance = gapSize + 5;
-        let actualGap = Math.abs(v1 - v2);
-        return actualGap <= tolerance && Math.abs(actualGap - gapSize) > 1;
-    }
+    static pickSnapTarget(frame, area, candidates, threshold) {
+        const EDGES = ["left", "right", "top", "bottom"];
+        const deviation = (form) => Math.max(...EDGES.map((e) => Math.abs(frame[e] - form[e])));
 
-    /**
-     * Horizontal overlap check with tolerance.
-     * @param {object} geo1
-     * @param {object} geo2
-     * @returns {boolean}
-     */
-    static overlapHor(geo1, geo2) {
-        let tolerance = 2 * gap.mid;
-        return (
-            (geo1.left <= geo2.left + tolerance && geo1.right > geo2.left + tolerance) ||
-            (geo2.left <= geo1.left + tolerance && geo2.right + tolerance > geo1.left)
-        );
-    }
+        let best = null;
+        let bestDeviation = Infinity;
+        for (const c of candidates) {
+            const d = Math.min(deviation(c.gapped), deviation(c.closed));
+            if (d <= threshold && d < bestDeviation) {
+                best = c.name;
+                bestDeviation = d;
+            }
+        }
+        if (best) return best;
 
-    /**
-     * Vertical overlap check with tolerance.
-     * @param {object} geo1
-     * @param {object} geo2
-     * @returns {boolean}
-     */
-    static overlapVer(geo1, geo2) {
-        let tolerance = 2 * gap.mid;
-        return (
-            (geo1.top <= geo2.top + tolerance && geo1.bottom > geo2.top + tolerance) ||
-            (geo2.top <= geo1.top + tolerance && geo2.bottom + tolerance > geo1.top)
-        );
+        const touched = [];
+        if (frame.left <= area.left + threshold) touched.push("left");
+        if (frame.right >= area.right - threshold) touched.push("right");
+        if (frame.top <= area.top + threshold) touched.push("top");
+        if (frame.bottom >= area.bottom - threshold) touched.push("bottom");
+        if (touched.length === 0) return null;
+
+        const iou = (r) => {
+            const w = Math.max(0, Math.min(frame.right, r.right) - Math.max(frame.left, r.left));
+            const h = Math.max(0, Math.min(frame.bottom, r.bottom) - Math.max(frame.top, r.top));
+            const inter = w * h;
+            const union = (frame.right - frame.left) * (frame.bottom - frame.top) + (r.right - r.left) * (r.bottom - r.top) - inter;
+            return union > 0 ? inter / union : 0;
+        };
+        let bestOverlap = -1;
+        for (const c of candidates) {
+            if (!touched.every((side) => c.sides.includes(side))) continue;
+            const o = iou(c.gapped);
+            if (o > bestOverlap) {
+                best = c.name;
+                bestOverlap = o;
+            }
+        }
+        return best;
     }
 
     /**
