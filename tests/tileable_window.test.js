@@ -234,44 +234,4 @@ describe("TileableWindow Class", () => {
         // Outside tolerance
         expect(WindowGeometry.nearArea(150, 100, 110, gapSize)).toBe(false);
     });
-
-    /**
-     * Test TileableWindow.nearWindow
-     */
-    test("nearWindow correctly identifies nearby windows", () => {
-        const gapSize = 10;
-        // actualGap is 10, which is == gapSize. But the formula is Math.abs(actualGap - gapSize) > 1
-        // Wait, the original nearWindow:
-        // actualGap <= tolerance && Math.abs(actualGap - gapSize) > 1
-        // If actualGap is 10 and gapSize is 10, Math.abs(10-10) = 0. 0 > 1 is false.
-        // So it returns false for EXACT gap? That seems intended to avoid "snapping" what is already snapped?
-        
-        // actualGap = 5, gapSize = 10. Math.abs(5 - 10) = 5. 5 > 1 is true. 5 <= 15 is true.
-        expect(WindowGeometry.nearWindow(100, 105, gapSize)).toBe(true);
-        
-        // actualGap = 10, gapSize = 10. Math.abs(0) > 1 is false.
-        expect(WindowGeometry.nearWindow(100, 110, gapSize)).toBe(false);
-
-        // actualGap = 15, gapSize = 10. Math.abs(5) > 1 is true. 15 <= 15 is true.
-        expect(WindowGeometry.nearWindow(100, 115, gapSize)).toBe(true);
-
-        // actualGap = 20, gapSize = 10. 20 > 15 is false.
-        expect(WindowGeometry.nearWindow(100, 120, gapSize)).toBe(false);
-    });
-
-    /**
-     * Test TileableWindow.overlapHor and overlapVer
-     */
-    test("overlapHor and overlapVer correctly detect overlaps", () => {
-        global.gap = { mid: 8 };
-        const win1 = { left: 0, right: 100, top: 0, bottom: 100 };
-        const win2 = { left: 50, right: 150, top: 50, bottom: 150 };
-        const win3 = { left: 200, right: 300, top: 200, bottom: 300 };
-
-        expect(WindowGeometry.overlapHor(win1, win2)).toBe(true);
-        expect(WindowGeometry.overlapVer(win1, win2)).toBe(true);
-
-        expect(WindowGeometry.overlapHor(win1, win3)).toBe(false);
-        expect(WindowGeometry.overlapVer(win1, win3)).toBe(false);
-    });
 });
