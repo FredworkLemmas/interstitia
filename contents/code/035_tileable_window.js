@@ -142,6 +142,18 @@ class BaseWindow {
     }
 
     /**
+     * True when KWin has the window in a tile (quick tile or custom layout) or fully maximized.
+     * Only these windows get gaps; floating windows keep whatever borders the user gave them.
+     * @returns {boolean}
+     */
+    isTiledOrMaximized() {
+        if (!this.window) return false;
+        if (this.window.tile) return true;
+        if (this.window.maximizeMode !== undefined) return this.window.maximizeMode === 3;
+        return this.isMaximized();
+    }
+
+    /**
      * Gets the window's caption (title).
      * @returns {string|null} The caption or null if window is invalid.
      */
@@ -507,6 +519,12 @@ class TileableWindow extends BaseWindow {
             return;
         }
 
+        // Floating windows keep their borders; they only ever get placed by snapToTile() on drop.
+        if (!this.isTiledOrMaximized()) {
+            fulldebug("applyGaps: floating, leaving borders alone", this.getCaption());
+            return;
+        }
+
         coordinator.block = true;
         debug("----------------");
         debug("gaps for", this.getCaption());
@@ -529,7 +547,6 @@ class TileableWindow extends BaseWindow {
             }, {});
 
             this.applyGapsArea(clientGeometries);
-            this.applyGapsWindows(clientGeometries);
 
             for (const c of workspace.windowList()) {
                 if (c.internalId in clientGeometries && c.frameGeometry &&
@@ -612,63 +629,6 @@ class TileableWindow extends BaseWindow {
         geo.width = geo.right - geo.left;
         geo.height = geo.bottom - geo.top;
     }
-
-    /**
-     * Applies gaps between this window and other windows on the same output/desktop.
-     * Iterates through all visible windows to find adjacent ones and adjust boundaries.
-     * @param {Object.<string, object>} clientGeometries - Map of window IDs to their draft geometries.
-     */
-    applyGapsWindows(clientGeometries) {
-        let geo1 = clientGeometries[this.window.internalId];
-
-        for (const c2 of workspace.windowList()) {
-            const tw2 = TileableWindow.get(c2);
-            if (this.shouldIgnoreOther(tw2)) continue;
-
-            let geo2 = clientGeometries[c2.internalId];
-            if (!geo2) continue;
-
-            // Horizontal gap check (side-by-side windows)
-            if (WindowGeometry.overlapVer(geo1, geo2)) {
-                if (WindowGeometry.nearWindow(geo1.left, geo2.right, gap.mid)) {
-                    let diff = gap.mid - (geo1.left - geo2.right);
-                    geo1.left += diff / 2;
-                    geo1.width -= diff / 2;
-                    geo2.right -= diff / 2;
-                    geo2.width -= diff / 2;
-                }
-                if (WindowGeometry.nearWindow(geo1.right, geo2.left, gap.mid)) {
-                    let diff = gap.mid - (geo2.left - geo1.right);
-                    geo1.right -= diff / 2;
-                    geo1.width -= diff / 2;
-                    geo2.left += diff / 2;
-                    geo2.width -= diff / 2;
-                }
-            }
-            // Vertical gap check (stacked windows)
-            if (WindowGeometry.overlapHor(geo1, geo2)) {
-                if (WindowGeometry.nearWindow(geo1.top, geo2.bottom, gap.mid)) {
-                    let diff = gap.mid - (geo1.top - geo2.bottom);
-                    geo1.top += diff / 2;
-                    geo1.height -= diff / 2;
-                    geo2.bottom -= diff / 2;
-                    geo2.height -= diff / 2;
-                }
-                if (WindowGeometry.nearWindow(geo1.bottom, geo2.top, gap.mid)) {
-                    let diff = gap.mid - (geo2.top - geo1.bottom);
-                    geo1.bottom -= diff / 2;
-                    geo1.height -= diff / 2;
-                    geo2.top += diff / 2;
-                    geo2.height -= diff / 2;
-                }
-            }
-        }
-        // Sync coordinates
-        geo1.x = geo1.left;
-        geo1.y = geo1.top;
-    }
-
-    // --- Cascade Logic ---
 
     /**
      * Called after applyGaps when a tile/quick-tile change occurs (updateCascade=true).
