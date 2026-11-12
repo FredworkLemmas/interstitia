@@ -140,6 +140,28 @@ describe("CascadeGroup Class", () => {
         expect(mockWindow2.interstitia_cascadeSlotKey).toBeUndefined();
     });
 
+    test("reapply raises members in stacking order, front window last", () => {
+        const group = new CascadeGroup("key", slotGeo, ["win-1", "win-2"], 0);
+        TileableWindow.get(mockWindow1);
+        TileableWindow.get(mockWindow2);
+        const raised = [];
+        let active = null;
+        Object.defineProperty(workspace, "activeWindow", {
+            configurable: true,
+            get: () => active,
+            set: (w) => { active = w; raised.push(w.internalId); },
+        });
+        try {
+            group.reapply(null);
+            expect(raised).toEqual(["win-1", "win-2"]);
+            raised.length = 0;
+            group.reapply("win-1");
+            expect(raised).toEqual(["win-2", "win-1"]);
+        } finally {
+            Object.defineProperty(workspace, "activeWindow", { configurable: true, writable: true, value: null });
+        }
+    });
+
     test("cycle rotates members", () => {
         const group = new CascadeGroup("key", slotGeo, ["win-1", "win-2"], 0);
         const tw1 = TileableWindow.get(mockWindow1);

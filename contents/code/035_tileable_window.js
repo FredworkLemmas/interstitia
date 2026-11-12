@@ -963,6 +963,9 @@ class CascadeGroup {
                 };
                 debug("CascadeGroup.reapply: positioning", tw.getCaption(), "at index", index, newGeo.x, newGeo.y);
                 tw.window.frameGeometry = newGeo;
+                if (id !== activeId) {
+                    workspace.activeWindow = tw.window;
+                }
             });
         } finally {
             coordinator.block = false;
