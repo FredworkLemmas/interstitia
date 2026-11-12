@@ -714,48 +714,105 @@ class TileableWindow extends BaseWindow {
         this.window.interactiveMoveResizeStarted.connect(() => {
             debug("interactive move/resize started (mouse drag detected)", this.getCaption());
             coordinator.mouseDragOrResizeInProgress = true;
-            // Record geometry and tile state before Plasma restores the floating size.
-            this._dragStartGeometry = new WindowGeometry(this.window.frameGeometry);
-            this._dragStartWasTiled = this.window.quickTileMode !== 0;
+            // Only a move can snap into a tile on drop; a resize never does.
+            this._dragIsMove = Boolean(this.window.move);
             // Leave cascade group on drag start.
             this._dragStartCascadeKey = this.window.interstitia_cascadeSlotKey || null;
             if (this._dragStartCascadeKey) {
                 debug("drag start: leaving cascade group", this._dragStartCascadeKey);
                 TileableWindow.removeFromCascadeGroup(this, this._dragStartCascadeKey);
             }
-            debug("drag start: wasTiled", this._dragStartWasTiled, "geo", this._dragStartGeometry.toString());
+            debug("drag start: move", this._dragIsMove);
         });
 
         this.window.interactiveMoveResizeFinished.connect(() => {
             debug("interactive move/resize finished (mouse drag ended)", this.getCaption());
             coordinator.mouseDragOrResizeInProgress = false;
-            // If the window was tiled before the drag and KDE did not re-tile it at the
-            // drop target, restore its tiled dimensions at the drop position before applying
-            // gaps. If quickTileMode !== 0, KDE already committed a new tile slot — leave
-            // the geometry alone so the corner-drop tiling actually takes effect.
-            if (this._dragStartWasTiled && this._dragStartGeometry && this.window.quickTileMode === 0) {
-                const dropGeo = this.window.frameGeometry;
-                debug("drag end: restoring tiled dimensions", this._dragStartGeometry.width, "x", this._dragStartGeometry.height, "at", dropGeo.x, dropGeo.y);
-                this.window.frameGeometry = {
-                    x: dropGeo.x,
-                    y: dropGeo.y,
-                    width: this._dragStartGeometry.width,
-                    height: this._dragStartGeometry.height,
-                };
-            }
-            this._dragStartGeometry = null;
-            this._dragStartWasTiled = false;
+            const wasMove = this._dragIsMove;
+            this._dragIsMove = false;
+            this._dragStartCascadeKey = null;
 
             // Check if dropped onto a cascade group; if so, join it.
             const dropTarget = this._findCascadeDropTarget();
             if (dropTarget) {
                 debug("drag end: joining cascade group", dropTarget);
                 TileableWindow.addToCascadeGroup(this, dropTarget);
-            } else {
-                this.applyGaps();
+                return;
             }
-            this._dragStartCascadeKey = null;
+
+            // KWin 6.8 can update a window's tile just after Finished (drag-to-edge tiling),
+            // so decide what to do once it has settled.
+            const timer = new QTimer();
+            timer.interval = TileableWindow.DROP_SETTLE_MS;
+            timer.singleShot = true;
+            timer.timeout.connect(() => this.afterDrop(wasMove));
+            timer.start();
         });
+    }
+
+    /**
+     * Runs shortly after a drag or resize ends. Tiled or maximized windows get their gaps.
+     * A floating window that was moved snaps into a nearby quick-tile spot if there is one;
+     * otherwise nothing changes.
+     * @param {boolean} wasMove - Whether the interaction was a move rather than a resize.
+     */
+    afterDrop(wasMove) {
+        if (!this.window || this.shouldIgnore()) return;
+        if (this.isTiledOrMaximized()) {
+            this.applyGaps();
+            return;
+        }
+        if (wasMove) this.snapToTile();
+    }
+
+    /**
+     * The quick-tile spots on this window's output, as candidates for WindowGeometry.pickSnapTarget.
+     * @returns {Array<{name: string, sides: string[], closed: object, gapped: object}>}
+     */
+    getSnapCandidates() {
+        const g = this.getGridAnchors();
+        const L = g.left.fullLeft, LH = g.left.halfHorizontal;
+        const R = g.right.fullRight, RH = g.right.halfHorizontal;
+        const T = g.top.fullTop, TH = g.top.halfVertical;
+        const B = g.bottom.fullBottom, BH = g.bottom.halfVertical;
+        const spot = (name, sides, left, right, top, bottom) => ({
+            name,
+            sides,
+            closed: { left: left.closed, right: right.closed, top: top.closed, bottom: bottom.closed },
+            gapped: { left: left.gapped, right: right.gapped, top: top.gapped, bottom: bottom.gapped },
+        });
+        return [
+            spot("left", ["left", "top", "bottom"], L, RH, T, B),
+            spot("right", ["right", "top", "bottom"], LH, R, T, B),
+            spot("topLeft", ["left", "top"], L, RH, T, BH),
+            spot("topRight", ["right", "top"], LH, R, T, BH),
+            spot("bottomLeft", ["left", "bottom"], L, RH, TH, B),
+            spot("bottomRight", ["right", "bottom"], LH, R, TH, B),
+            spot("maximize", ["left", "right", "top", "bottom"], L, R, T, B),
+        ];
+    }
+
+    /**
+     * If this floating window lines up with a quick-tile spot, or sits against a screen edge,
+     * make it a real KWin quick tile there (the same as Meta+arrows). Otherwise leave it alone.
+     * @returns {string|null} The spot it was tiled into.
+     */
+    snapToTile() {
+        const area = new WindowGeometry(this.getWorkArea());
+        const target = WindowGeometry.pickSnapTarget(this.geometry, area, this.getSnapCandidates(), TileableWindow.SNAP_DISTANCE);
+        if (!target) {
+            debug("drop: no tile spot nearby, leaving", this.getCaption(), "where it is");
+            return null;
+        }
+        const slot = TileableWindow.SNAP_SLOTS[target];
+        if (typeof workspace[slot] !== "function") {
+            debug("drop: KWin has no", slot, "- not snapping", this.getCaption());
+            return null;
+        }
+        debug("drop: snapping", this.getCaption(), "into", target);
+        workspace.activeWindow = this.window;
+        workspace[slot]();
+        return target;
     }
 
     /**
@@ -819,6 +876,21 @@ if (typeof global !== "undefined") {
 
 /** @type {Map<string, TileableWindow>} Cache of instances indexed by window internalId. */
 TileableWindow._instances = new Map();
+
+/** How close (px) a dropped window's edges must be to a tile spot or screen edge to snap. */
+TileableWindow.SNAP_DISTANCE = 24;
+/** How long (ms) to wait after a drag ends for KWin's own tile updates to land. */
+TileableWindow.DROP_SETTLE_MS = 50;
+/** The KWin workspace slot that quick-tiles the active window into each spot. */
+TileableWindow.SNAP_SLOTS = {
+    left: "slotWindowQuickTileLeft",
+    right: "slotWindowQuickTileRight",
+    topLeft: "slotWindowQuickTileTopLeft",
+    topRight: "slotWindowQuickTileTopRight",
+    bottomLeft: "slotWindowQuickTileBottomLeft",
+    bottomRight: "slotWindowQuickTileBottomRight",
+    maximize: "slotWindowMaximize",
+};
 
 /**
  * CascadeGroup Class
