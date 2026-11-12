@@ -4,7 +4,7 @@ if (workspace.configChanged !== undefined) {
     workspace.configChanged.connect(() => {
         console.log("interstitia: config changed signal received");
         loadConfig();
-        TileableWindow.applyGapsAll();
+        coordinator.applyGapsAll();
     });
 }
 

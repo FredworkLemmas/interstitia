@@ -10,7 +10,7 @@ function onRelayouted() {
         signal.connect((...args) => {
             if (condition(...args)) {
                 debug(message);
-                TileableWindow.applyGapsAll();
+                coordinator.applyGapsAll();
             }
         });
     };
