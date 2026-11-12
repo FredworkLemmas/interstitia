@@ -74,8 +74,15 @@ class BaseWindow {
     constructor(window) {
         /** @type {KWin.Window} The wrapped KWin window object. */
         this.window = window;
-        /** @type {WindowGeometry} The window's current geometry. */
-        this.geometry = new WindowGeometry(window.frameGeometry);
+    }
+
+    /**
+     * The window's current geometry, read from KWin on every access.
+     * Instances are cached for the window's lifetime, so this must never be stored.
+     * @returns {WindowGeometry}
+     */
+    get geometry() {
+        return new WindowGeometry(this.window.frameGeometry);
     }
 
     /**

@@ -53,6 +53,14 @@ describe("BaseWindow Class", () => {
         expect(bw.geometry.x).toBe(100);
     });
 
+    test("isMaximized follows the window's current geometry, not the geometry at construction", () => {
+        const bw = new BaseWindow(mockWindow);
+        expect(bw.isMaximized()).toBe(false);
+        mockWindow.frameGeometry = { x: 0, y: 0, width: 1920, height: 1080 };
+        expect(bw.isMaximized()).toBe(true);
+        expect(bw.geometry.width).toBe(1920);
+    });
+
     test("getInfo returns correct metadata", () => {
         const bw = new BaseWindow(mockWindow);
         const info = bw.getInfo();
