@@ -67,6 +67,14 @@
     "getWindowCaption": "readonly",
     "getWindowGeometry": "readonly",
     "QTimer": "readonly",
-    "registerShortcut": "readonly"
+    "registerShortcut": "readonly",
+    "global": "readonly",
+    "WindowGeometry": "readonly",
+    "WindowCoordinator": "readonly",
+    "coordinator": "readonly",
+    "BaseWindow": "readonly",
+    "TileableWindow": "readonly",
+    "ActiveWindow": "readonly",
+    "CascadeGroup": "readonly"
   }
 }
