@@ -7,17 +7,10 @@ class WindowGeometry {
      * @param {object} geometry - Object with x, y, width, height properties.
      */
     constructor(geometry) {
-        if (geometry instanceof WindowGeometry) {
-            this.x = geometry.x;
-            this.y = geometry.y;
-            this.width = geometry.width;
-            this.height = geometry.height;
-        } else {
-            this.x = geometry.x;
-            this.y = geometry.y;
-            this.width = geometry.width;
-            this.height = geometry.height;
-        }
+        this.x = geometry.x;
+        this.y = geometry.y;
+        this.width = geometry.width;
+        this.height = geometry.height;
         this.left = this.x;
         this.top = this.y;
         this.right = this.x + this.width;
