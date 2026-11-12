@@ -995,20 +995,6 @@ if (typeof global !== "undefined") {
 }
 
 /**
- * CascadeGroupWindow Class
- * Specialized TileableWindow that belongs to a cascade group.
- */
-class CascadeGroupWindow extends TileableWindow {
-    constructor(window) {
-        super(window);
-    }
-}
-
-if (typeof global !== "undefined") {
-    global.CascadeGroupWindow = CascadeGroupWindow;
-}
-
-/**
  * ActiveWindow Class (Singleton)
  * Represents the currently active window in the workspace.
  * Extends TileableWindow to provide specific actions like cascading.
