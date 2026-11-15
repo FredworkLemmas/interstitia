@@ -8,6 +8,11 @@
 - Fixed a window restored from maximized having its restored size changed
 - Refactored the window classes (WindowGeometry, BaseWindow, TileableWindow, CascadeGroup)
 
+[ 1.1.2 ]
+- Pressing the cascade shortcut again cycles through the windows in a cascade group
+- Improved cascading of windows that share a tiling slot
+- Closed windows are now removed from their cascade group
+
 [ 1.1.1 ]
 - Fixed windows shrinking or vanishing while being dragged
 - Tiled windows now restore their tiled dimensions after being dragged and released
