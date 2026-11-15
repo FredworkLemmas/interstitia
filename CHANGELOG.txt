@@ -7,6 +7,7 @@
 - Removed restoring a window's tiled size after it is dragged out of a tile (KWin 6.8 removed the quickTileMode it relied on)
 - Fixed a window restored from maximized having its restored size changed
 - Refactored the window classes (WindowGeometry, BaseWindow, TileableWindow, CascadeGroup)
+- Added tests for screens whose work area doesn't start at 0,0 (thanks to Felix Jara, #12)
 
 [ 1.1.2 ]
 - Pressing the cascade shortcut again cycles through the windows in a cascade group
