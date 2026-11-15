@@ -24,7 +24,8 @@ invoke dev:format
 # Building
 invoke dev:bundle           # Concatenate source files into contents/code/main.js
 invoke dev:install          # Bundle then run install.sh (installs to KDE plugin dir)
-invoke dev:release          # Bundle then package.sh (creates distributable)
+invoke dev:release --dry-run  # Bundle, package and check; print release notes (publishes nothing)
+invoke dev:release          # Same, then publish the GitHub release (clean origin/main only; see the release skill)
 invoke dev:clean-repo       # Remove generated main.js
 
 # Run a single test file
