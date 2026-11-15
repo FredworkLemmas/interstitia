@@ -178,6 +178,8 @@ describe("TileableWindow Class", () => {
     test("applies edge gaps using a KWin work area with only rectangle coordinates", () => {
         workspace.clientArea.mockReturnValue({ x: 100, y: 50, width: 1920, height: 1080 });
         mockWindow.frameGeometry = { x: 100, y: 50, width: 960, height: 1080 };
+        // Only tiled or maximized windows get gaps: put the window in KWin's left-half tile.
+        mockWindow.tile = { absoluteGeometry: { x: 100, y: 50, width: 960, height: 1080 } };
         coordinator.block = false;
         coordinator.mouseDragOrResizeInProgress = false;
         config.includeMaximized = false;

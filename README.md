@@ -93,6 +93,10 @@ For [Sticky Window Snapping](https://store.kde.org/p/1112552/) to work with gaps
 To find the window class name of an application: Right-click on the titlebar of a window of the application > *More Actions* > *Configure Special Application Settings...* > the pre-filled entry in *Window class (application)* (if it consists of two words, only the second part) is the window class to put in the script configuration.
 
 
+## Thanks
+
+Thanks to Felix Jara ([@felix-clabs](https://github.com/felix-clabs)) for tests covering screens whose work area doesn't start at 0,0 ([#12](https://github.com/FredworkLemmas/interstitia/pull/12)).
+
 ## Small Print
 
 © 2022-2023 Natalie Clarius \<natalie_clarius@yahoo.de\> [nclarius.github.io](https://nclarius.github.io)
