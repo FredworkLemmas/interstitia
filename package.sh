@@ -18,9 +18,17 @@ esac
 
 die() { echo "package.sh: $*" >&2; exit 1; }
 
-# gh needs the session bus for its keyring, which an SSH shell doesn't set.
-if [[ -z "${DBUS_SESSION_BUS_ADDRESS:-}" && -S "/run/user/$(id -u)/bus" ]]; then
-	export DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$(id -u)/bus"
+# gh reads its token from the keyring over the session bus. An SSH shell, or one
+# inherited from an old session, can carry a missing or stale bus address, and then
+# gh fails with "HTTP 401" only once the release is built. Check it up front, and
+# retry with this user's session bus before giving up.
+if ! $dry_run && ! gh auth status >/dev/null 2>&1; then
+	bus="/run/user/$(id -u)/bus"
+	if [[ -S "$bus" && "${DBUS_SESSION_BUS_ADDRESS:-}" != "unix:path=$bus" ]]; then
+		echo "gh can't reach its keyring; retrying with the session bus at $bus" >&2
+		export DBUS_SESSION_BUS_ADDRESS="unix:path=$bus"
+	fi
+	gh auth status >/dev/null 2>&1 || die "gh isn't authenticated; run 'gh auth status' to see why"
 fi
 
 # Plugin info comes from metadata.json, never from the folder name.
