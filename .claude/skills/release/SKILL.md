@@ -84,4 +84,4 @@ After the GitHub release, update the listing by hand:
 - The package and tag are named from `metadata.json`, never from the folder, so any checkout or worktree works
 - `package.sh` never commits, pushes, or deletes a release; an existing tag makes it refuse rather than recreate
 - Untracked files (such as `.claude/settings.local.json`) make it refuse; gitignored ones (`main.js`, `*.kwinscript`) don't
-- `gh` needs `DBUS_SESSION_BUS_ADDRESS` for its keyring; `package.sh` sets it from `/run/user/<uid>/bus` when an SSH shell leaves it unset
+- `gh` needs a working `DBUS_SESSION_BUS_ADDRESS` for its keyring; before publishing, `package.sh` checks `gh auth status` and, if it fails, retries with `/run/user/<uid>/bus`, which covers an address that is unset or stale
