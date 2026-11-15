@@ -1,11 +1,3 @@
-[Upstream]
-
-[ Pre-release edits ]
-- Updates to support Plasma 6.5
-- Updates to turn off border recalculation while dragging a window across screen(s)
-- Border calculation tweaks to allow for better consistency across applications.
-- Updates to support Plasma 6.6
-
 [ 1.1.3 ]
 - Supports Plasma 6.8 (and still 6.5 to 6.7)
 - Fixed gaps no longer being applied under Plasma 6.8 (KWin 6.8 rectangles no longer expose left/right/top/bottom)
@@ -29,3 +21,11 @@
 [ 1.0.0 ]
 - Renamed "Tile gaps" project to Interstitia
 - Reset versioning to 1.0.0
+
+[ Pre-release edits ]
+- Updates to support Plasma 6.5
+- Updates to turn off border recalculation while dragging a window across screen(s)
+- Border calculation tweaks to allow for better consistency across applications.
+- Updates to support Plasma 6.6
+
+[Upstream]
