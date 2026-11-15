@@ -46,8 +46,8 @@ The `contents/code/` directory contains numbered source modules that `invoke dev
 | `010_init.js` | Global flags, Plasma 6 detection (`isPlasma6`) |
 | `020_logging.js` | `debug()` / `fulldebug()` utilities |
 | `030_config.js` | Config loading from KDE settings with multi-API fallback |
-| `034_geometry.js` | `TileableWindowGeometry` value object (x, y, width, height) |
-| `035_tileable_window.js` | Core logic: `WindowCoordinator`, `TileableWindow`, `ActiveWindow` |
+| `034_geometry.js` | `WindowGeometry` value object (x, y, width, height, and derived edges) and static geometry helpers, including `pickSnapTarget` |
+| `035_tileable_window.js` | Core logic: `WindowCoordinator`, `BaseWindow`, `TileableWindow`, `CascadeGroup`, `ActiveWindow` |
 | `070_reaction.js` | Workspace signal wiring (`onRelayouted`) |
 | `080_main_loop.js` | Entry point: config load, shortcut registration, window init |
 
@@ -56,7 +56,8 @@ The `contents/code/` directory contains numbered source modules that `invoke dev
 **`WindowCoordinator`** (singleton) — guards against recursive geometry updates. The `block` flag must be set before any programmatic window move/resize and cleared after, to prevent the geometry signal handlers from re-triggering.
 
 **`TileableWindow`** — wraps a `KWin.Window` object. Use the factory `TileableWindow.get(window)` (never `new`) to get a singleton per window. Key methods:
-- `applyGaps()` — entry point for the gap algorithm; calls `applyGapsArea()` (snap to screen edges) then `applyGapsWindows()` (snap to adjacent windows)
+- `applyGaps()` — entry point for the gap algorithm; runs only for windows in a KWin tile or maximized (`isTiledOrMaximized()`), and calls `applyGapsArea()` (snap edges to the gapped grid anchors)
+- `afterDrop()` / `snapToTile()` — 50 ms after a drag ends: tiled or maximized windows get gaps; a moved floating window is quick-tiled into a nearby spot (`getSnapCandidates()`, `WindowGeometry.pickSnapTarget`) or left alone
 - `getGridAnchors()` — calculates quarter/half/full snap points for the tiling grid, accounting for gap offsets
 - `shouldIgnore()` — checks window against app blacklist/whitelist
 - `initialize()` / `setupGeometrySignals()` — connects KWin signals for this window
@@ -69,7 +70,8 @@ The `contents/code/` directory contains numbered source modules that `invoke dev
 2. Compute grid anchors: edge positions at 0%, 25%, 50%, 75%, 100% of the work area
 3. For each anchor, there are two snapping positions: "closed" (no gap) and "open" (with gap)
 4. If any window edge is near an anchor (within tolerance), snap it to the "open" version
-5. For inter-window gaps, check neighboring windows and insert spacing between them
+5. The gap between windows tiled side by side comes from the half/quarter anchors, which include `gapMid`; neighbouring windows are never resized
+6. Only tiled and maximized windows are gapped; floating windows are only ever changed by the drop snap
 
 ### Signal / State Management
 
@@ -83,6 +85,9 @@ The codebase bridges Plasma 5 and Plasma 6 APIs:
 - Window list: `workspace.windowList()` (P6) vs `workspace.clientList()` (P5)
 - Screen: `window.output` (P6) vs `window.screen` (P5)
 - The `isPlasma6` global (set in `010_init.js`) gates these branches
+- KWin 6.8 rects (`clientArea()`, `frameGeometry`) carry only x/y/width/height; wrap them in `WindowGeometry` before reading `left`/`right`/`top`/`bottom`
+- KWin 6.8 removed `window.quickTileMode`; use `window.tile` (with `quickTileMode` only as a pre-6.8 fallback)
+- `tests/plasma68.test.js` runs every scenario against both the 6.8 and the 6.5–6.7 API shape
 
 ### Configuration
 

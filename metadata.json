@@ -15,8 +15,8 @@
                 "Name": "Fred McDavid"
             }
         ],
-        "Description": "Adds space around windows touching a screen edge or other window. Supports Plasma 6.5 and 6.6.",
-        "Description[de]": "Fügt Abstände um Fenster hinzu, die den Bildschirmrand oder andere Fenster berühren. Unterstützt Plasma 6.5 und 6.6.",
+        "Description": "Adds space around tiled and maximized windows, and snaps dropped windows into nearby quick-tile spots. Supports Plasma 6.5 to 6.8.",
+        "Description[de]": "Fügt Abstände um gekachelte und maximierte Fenster hinzu und rastet abgelegte Fenster in nahe Schnellkachel-Positionen ein. Unterstützt Plasma 6.5 bis 6.8.",
         "EnabledByDefault": true,
         "Icon": "preferences-system-windows",
         "Id": "interstitia",
@@ -27,7 +27,7 @@
             "KWin/Script",
             "KCModule"
         ],
-        "Version": "1.1.2",
+        "Version": "1.1.3",
         "Website": "https://github.com/FredworkLemmas/interstitia"
     },
     "X-KDE-ConfigModule": "kwin/effects/configs/kcm_kwin4_genericscripted",
@@ -37,7 +37,7 @@
         "interstitia"
     ],
     "X-KDE-PluginKeyword": "interstitia",
-    "X-KDE-PluginInfo-Version": "1.1.2",
+    "X-KDE-PluginInfo-Version": "1.1.3",
     "X-KDE-PluginInfo-Website": "https://github.com/FredworkLemmas/interstitia",
     "X-KDE-PluginInfo-Category": "KWin Script",
     "X-KDE-PluginInfo-License": "GPLv3",

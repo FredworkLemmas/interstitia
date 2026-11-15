@@ -15,7 +15,7 @@ global.workspace = {
     windowAdded: { connect: jest.fn() },
 };
 global.debug = jest.fn();
-global.TileableWindow = {
+global.coordinator = {
     applyGapsAll: jest.fn()
 };
 
@@ -48,7 +48,7 @@ describe("onRelayouted", () => {
         callback();
 
         expect(debug).toHaveBeenCalledWith("current desktop changed");
-        expect(TileableWindow.applyGapsAll).toHaveBeenCalled();
+        expect(coordinator.applyGapsAll).toHaveBeenCalled();
     });
 
     test("handles undefined outputOrderChanged gracefully", () => {
@@ -69,12 +69,12 @@ describe("onRelayouted", () => {
         // Mock a normal window
         const normalWindow = { dock: false };
         callback(normalWindow);
-        expect(TileableWindow.applyGapsAll).not.toHaveBeenCalled();
+        expect(coordinator.applyGapsAll).not.toHaveBeenCalled();
 
         // Mock a dock window
         const dockWindow = { dock: true };
         callback(dockWindow);
         expect(debug).toHaveBeenCalledWith("dock added");
-        expect(TileableWindow.applyGapsAll).toHaveBeenCalled();
+        expect(coordinator.applyGapsAll).toHaveBeenCalled();
     });
 });

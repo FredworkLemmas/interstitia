@@ -146,14 +146,11 @@ describe("cascade cycling", () => {
         windows.forEach((w) => TileableWindow.get(w));
 
         const slotGeo = { x: 100, y: 100, width: 800, height: 600 };
-        const key = TileableWindow.slotKey(slotGeo);
+        const key = WindowGeometry.slotKey(slotGeo);
         const memberIds = windows.map((w) => w.internalId);
 
-        coordinator.cascadeGroups.set(key, {
-            slotGeometry: slotGeo,
-            members: memberIds,
-            output: 0,
-        });
+        const group = new CascadeGroup(key, new WindowGeometry(slotGeo), memberIds, 0);
+        coordinator.cascadeGroups.set(key, group);
         windows.forEach((w) => {
             w.interstitia_cascadeSlotKey = key;
         });

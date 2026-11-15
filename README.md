@@ -1,10 +1,10 @@
 # Interstitia
 
-Interstitia is an extension for KDE's window manager to add space around windows touching a screen edge or other window.
+Interstitia is an extension for KDE's window manager that adds space around tiled and maximized windows: between each window and the screen edges, and between windows tiled side by side.
 
-The size of the gap and the layouts and applications to be gapped are configurable.
+The size of the gap and the applications to be gapped are configurable.
 
-Please note that this script does not do any automatic tiling. Its purpose is to reshape windows that have been manually positioned with the stock KWin window management system.
+Interstitia works with KWin's own quick tiling (Meta+arrow keys, or dragging a window to a screen edge); it does not tile windows on its own. Floating windows keep exactly the size and position you give them, with one exception, described under *Dropping windows* below.
 
 ![screenshot](.img/screenshot.png)
 
@@ -13,7 +13,7 @@ Please note that this script does not do any automatic tiling. Its purpose is to
 ## This is a fork!
 The original project is [here](https://github.com/nclarius/tile-gaps) and appears to be abandoned with no activity since early 2023. This version is maintained at [FredworkLemmas/interstitia](https://github.com/FredworkLemmas/interstitia).
 
-Interstitia has been updated for Plasma 6 and is known to work in Plasma 6.5 and Plasma 6.6. It is no longer compatible with Plasma 5.
+Interstitia has been updated for Plasma 6 and is known to work in Plasma 6.5 through Plasma 6.8. It is no longer compatible with Plasma 5.
 
 So far, in addition to addressing the api updates, I've addressed a few bugs around border consistency and drag behaviors.
 
@@ -46,6 +46,16 @@ git clone https://github.com/FredworkLemmas/interstitia.git
 cd interstitia
 ./install.sh
 ```
+
+### Dropping windows
+
+When you drag a floating window and drop it, Interstitia checks whether it is close to a quick-tile spot: the left or right half, one of the four quarters, or the whole screen.
+
+*   **Lined up with a spot:** if every edge of the window is within 24 pixels of a spot, the window is quick-tiled into it, with gaps, just as if you had pressed Meta+arrow.
+*   **Against a screen edge:** if the window touches a screen edge (within 24 pixels, or past it), it is quick-tiled into whichever spot along that edge it overlaps most. Against the left edge, that is the left half or one of the left quarters.
+*   **Anywhere else:** nothing changes. Interstitia never resizes a floating window, or the windows around it.
+
+Resizing a window never snaps it.
 
 ### Cascading Windows
 
