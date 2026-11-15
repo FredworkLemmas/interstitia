@@ -33,8 +33,9 @@ def restart_kwin(c):
 
 
 @task(namespace='dev', name='release', pre=[bundle])
-def release(c):
-    c.run('sh ./package.sh')
+def release(c, dry_run=False):
+    """Package and publish a GitHub release of origin/main (--dry-run: build and check only)"""
+    c.run('bash ./package.sh' + (' --dry-run' if dry_run else ''))
 
 
 @task(namespace='dev', name='install-tools')

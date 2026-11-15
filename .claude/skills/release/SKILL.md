@@ -39,31 +39,49 @@ Add a new section above the previous release:
 ...
 ```
 
-Show the user the proposed changelog entry and confirm before proceeding. The changelog text becomes both the git commit message and the GitHub release notes.
+Show the user the proposed changelog entry and confirm before proceeding. This version's section, and only it, becomes the GitHub release notes.
 
-### 4. Run the release task
+### 4. Land the bump in a PR
+
+Commit the `metadata.json` and `CHANGELOG.txt` changes on a branch and open a PR against `main`. The release task never commits or pushes, so the release is exactly what is on `origin/main` once the PR is merged.
+
+### 5. Release from a clean `main`
+
+Set up the virtualenv once, on any account:
 
 ```bash
-source ~/.virtualenvs/interstitia/bin/activate && invocate dev.release
+python -m venv ~/.virtualenvs/interstitia && ~/.virtualenvs/interstitia/bin/pip install -r requirements-dev.txt
 ```
 
-This task:
-1. Bundles source modules into `main.js` (`dev.bundle`)
-2. Packages into a `.kwinscript` zip (containing `contents/`, `metadata.json`, `install.sh`, `uninstall.sh`, `README.md`, `LICENSE`)
-3. Runs `git add . && git commit && git push` — commit message is derived from `CHANGELOG.txt`
-4. Creates (or recreates) a GitHub release tagged `interstitia_vX.Y.Z` with the `.kwinscript` as the release asset
+Then, from a clean checkout at `origin/main` (a detached worktree works well):
 
-### 5. Update the KDE Store listing
+```bash
+source ~/.virtualenvs/interstitia/bin/activate
+invocate dev.release --dry-run   # build, check, print the notes; publishes nothing
+invocate dev.release             # the same, then publish
+```
 
-After the GitHub release, manually update the listing on OpenDesktop:
+Show the user the dry run's notes, file listing and checksum, and get their go-ahead before running it without `--dry-run`.
 
-1. Go to https://www.opendesktop.org/member/838882/products/
-2. Open the Interstitia product
-3. Update the version number
-4. Upload the generated `.kwinscript` file to the product files
+`dev.release` bundles the source modules into `main.js` (`dev.bundle`), then runs `package.sh`, which:
+1. Reads the name from `"Id"` and the version from `"Version"` in `metadata.json`, and refuses unless `"X-KDE-PluginInfo-Version"` matches
+2. Takes the `[ X.Y.Z ]` section of `CHANGELOG.txt` as the release notes, and refuses if it is missing or empty
+3. Refuses unless the working tree is clean, `HEAD` is `origin/main`, and no tag `interstitia_vX.Y.Z` exists on `origin`
+4. Zips `contents/`, `metadata.json`, `install.sh`, `uninstall.sh`, `README.md` and `LICENSE` into `interstitia_vX.Y.Z.kwinscript`, and prints its listing and checksum
+5. Without `--dry-run`, creates the GitHub release `interstitia_vX.Y.Z` at `HEAD` with the `.kwinscript` attached
+
+### 6. Update the KDE Store listing
+
+After the GitHub release, update the listing by hand:
+
+1. Open the Interstitia product through https://www.opendesktop.org/member/838882/products/ (the public page is https://www.pling.com/p/2349376/)
+2. Update the version number
+3. Upload the generated `.kwinscript` and mark it as the current file
+4. Paste the release notes into the changelog, if the page has one
 
 ### Notes
 
-- The release script reads version from the `"Version"` field in `metadata.json` to name the package and GitHub release tag
-- The git push targets the current branch — confirm the correct branch is checked out before releasing
-- If a GitHub release with the same tag already exists, it is deleted and recreated
+- The package and tag are named from `metadata.json`, never from the folder, so any checkout or worktree works
+- `package.sh` never commits, pushes, or deletes a release; an existing tag makes it refuse rather than recreate
+- Untracked files (such as `.claude/settings.local.json`) make it refuse; gitignored ones (`main.js`, `*.kwinscript`) don't
+- `gh` needs `DBUS_SESSION_BUS_ADDRESS` for its keyring; `package.sh` sets it from `/run/user/<uid>/bus` when an SSH shell leaves it unset
