@@ -392,6 +392,28 @@ describe.each(K.APIS)("KWin $name API", (a) => {
             expect(index().groupOf(tw(ws[0])).members).toEqual(["A", "C"]);
         });
 
+        test("the active member moved to another spot (Meta+arrows) ends up in front of the group", () => {
+            const ws = windowsIn(["A", "B", "C"]);
+            workspace.windowList.mockImplementation(() => ws);
+            ws.forEach((w) => tw(w).initialize());
+            press(ws[2]);
+            workspace.raiseWindow = jest.fn();
+            try {
+                const flush = { x: 960, y: 0, width: 960, height: 1080 };
+                Object.assign(ws[2], a.old ? { quickTileMode: 2 } : { tile: { absoluteGeometry: K.rect(flush), padding: 0 } });
+                ws[2].frameGeometry = flush;
+                ws[2].tileChanged.emit();
+                K.flushTimers();
+
+                expect(index().groupOf(tw(ws[2]))).toBeNull();
+                const raised = workspace.raiseWindow.mock.calls.map((c) => c[0].internalId);
+                expect(raised[raised.length - 1]).toBe("C");
+                expect(workspace.activeWindow).toBe(ws[2]);
+            } finally {
+                delete workspace.raiseWindow;
+            }
+        });
+
         test("a member re-tiled into the same spot stays in the group", () => {
             const ws = windowsIn(["A", "B"]);
             workspace.windowList.mockImplementation(() => ws);

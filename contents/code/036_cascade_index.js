@@ -196,7 +196,11 @@ class CascadeGroup {
             if (restored.length) {
                 restored.forEach((tw) => {
                     debug("CascadeGroup: member restored from maximized, leaving", this.key, tw.getCaption());
+                    // The group raises its own windows as it lays out again; the user's window
+                    // goes back in front of them.
+                    const wasActive = workspace.activeWindow === tw.window;
                     coordinator.cascades.remove(this, tw);
+                    if (wasActive) tw.bringToFront();
                 });
                 return;
             }

@@ -110,18 +110,43 @@ describe.each(K.APIS)("KWin $name API", (a) => {
         press(ws[2]);
         const group = index().groupOf(tw(ws[0]));
         const right = { x: 960, y: 0, width: 960, height: 1080 };
+        workspace.raiseWindow = jest.fn();
+        try {
+            ws[2].maximizeMode = 0;
+            Object.assign(ws[2], a.old ? { quickTileMode: 2 } : { tile: { absoluteGeometry: K.rect(right), padding: 0 } });
+            ws[2].frameGeometry = right;
+            ws[2].frameGeometryChanged.emit();
+            ws[2].maximizedChanged.emit();
+            ws[2].tileChanged.emit();
+            ws[2].quickTileModeChanged.emit();
+            K.flushTimers();
 
-        ws[2].maximizeMode = 0;
-        Object.assign(ws[2], a.old ? { quickTileMode: 2 } : { tile: { absoluteGeometry: K.rect(right), padding: 0 } });
-        ws[2].frameGeometry = right;
-        ws[2].frameGeometryChanged.emit();
-        ws[2].maximizedChanged.emit();
-        ws[2].tileChanged.emit();
-        ws[2].quickTileModeChanged.emit();
-        K.flushTimers();
+            expect(index().groupOf(tw(ws[2]))).toBeNull();
+            expect(group.ring.length).toBe(2);
+            expect(K.round(ws[2].frameGeometry)).toEqual({ x: 976, y: 32, width: 912, height: 1016 });
+            // In front of the group it left, which raised its own windows as it laid out again.
+            const raised = workspace.raiseWindow.mock.calls.map((c) => c[0].internalId);
+            expect(raised[raised.length - 1]).toBe("c");
+            expect(workspace.activeWindow).toBe(ws[2]);
+        } finally {
+            delete workspace.raiseWindow;
+        }
+    });
 
-        expect(index().groupOf(tw(ws[2]))).toBeNull();
-        expect(group.ring.length).toBe(2);
-        expect(K.round(ws[2].frameGeometry)).toEqual({ x: 976, y: 32, width: 912, height: 1016 });
+    test("a background member restored from maximized does not take the focus", () => {
+        const ws = maximized(["a", "b", "c"]);
+        press(ws[2]);
+        workspace.raiseWindow = jest.fn();
+        try {
+            ws[0].maximizeMode = 0;
+            ws[0].frameGeometry = { x: 300, y: 200, width: 600, height: 400 };
+            ws[0].maximizedChanged.emit();
+            K.flushTimers();
+
+            expect(workspace.raiseWindow.mock.calls.map((c) => c[0].internalId)).not.toContain("a");
+            expect(workspace.activeWindow).toBe(ws[2]);
+        } finally {
+            delete workspace.raiseWindow;
+        }
     });
 });

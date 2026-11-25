@@ -1006,6 +1006,9 @@ class TileableWindow extends BaseWindow {
         const spot = this.refreshSpot();
         const inSpot = (g) => spot && spot.output === g.output && spot.position === g.position;
         if (group && inSpot(group)) return;
+        // The group raises its own windows as it lays out again; the active window that left it
+        // (Meta+arrows) goes back in front. Others (say, moved off an unplugged screen) stay put.
+        const wasActive = Boolean(group) && workspace.activeWindow === this.window;
         if (group) {
             debug("spot changed: leaving cascade group", group.key, this.getCaption());
             index.remove(group, this);
@@ -1020,6 +1023,7 @@ class TileableWindow extends BaseWindow {
             // Gap it in its new spot even when it had no group here: the group's own settle
             // (a restore from a maximize group) can take it out first, skipping its gaps.
             this.applyGaps();
+            if (wasActive) this.bringToFront();
         }
     }
 
