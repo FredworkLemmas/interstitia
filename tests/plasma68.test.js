@@ -200,6 +200,101 @@ describe.each(APIS)("KWin $name API", (a) => {
         });
     });
 
+    describe("a tile split away from the 25/50/75% anchors (daneel, 2026-11-25)", () => {
+        // KWin keeps a quick-tile split where the user last dragged it. Here the left column is
+        // split at y = 600, 44 px from the half anchor (556), outside its 34 px reach.
+        const TOP = { x: 0, y: 0, width: 960, height: 600 };
+        const BOTTOM = { x: 0, y: 600, width: 960, height: 480 };
+
+        (a.old ? test.skip : test)("windows on either side of the split get the middle gap between them", () => {
+            const top = makeWindow("mr75", TOP, tiled(TOP));
+            const bottom = makeWindow("tmux", BOTTOM, tiled(BOTTOM));
+            workspace.windowList.mockReturnValue([top, bottom]);
+
+            TileableWindow.get(top).applyGaps();
+            TileableWindow.get(bottom).applyGaps();
+
+            // Outer edges from the anchors; the split edges at round(600 - 16) and that + 32.
+            expect(round(top.frameGeometry)).toEqual({ x: 32, y: 32, width: 912, height: 552 });
+            expect(round(bottom.frameGeometry)).toEqual({ x: 32, y: 616, width: 912, height: 432 });
+        });
+
+        (a.old ? test.skip : test)("re-applying gaps to an already gapped window changes nothing", () => {
+            const top = makeWindow("mr75", TOP, tiled(TOP));
+            workspace.windowList.mockReturnValue([top]);
+            TileableWindow.get(top).applyGaps();
+            const once = round(top.frameGeometry);
+
+            TileableWindow.get(top).applyGaps();
+
+            expect(round(top.frameGeometry)).toEqual(once);
+        });
+
+        (a.old ? test.skip : test)("a window not filling its tile keeps its edge", () => {
+            // The bottom edge is 200 px short of the split and near no anchor: not KWin's tile geometry, so not ours to move.
+            const top = makeWindow("mr75", { x: 0, y: 0, width: 960, height: 400 }, tiled(TOP));
+            workspace.windowList.mockReturnValue([top]);
+
+            TileableWindow.get(top).applyGaps();
+
+            expect(round(top.frameGeometry)).toEqual({ x: 32, y: 32, width: 912, height: 368 });
+        });
+
+        (a.old ? test : test.skip)("without a tile object only the anchors apply", () => {
+            const top = makeWindow("mr75", TOP, tiled(TOP));
+            workspace.windowList.mockReturnValue([top]);
+
+            TileableWindow.get(top).applyGaps();
+
+            expect(round(top.frameGeometry)).toEqual({ x: 32, y: 32, width: 912, height: 568 });
+        });
+    });
+
+    describe("resizing a tiled window re-gaps the neighbours KWin resized with it", () => {
+        test("the window below a resized top tile gets its gap back when the resize ends", () => {
+            const TOP = { x: 0, y: 0, width: 960, height: 540 };
+            const BOTTOM = { x: 0, y: 540, width: 960, height: 540 };
+            const top = makeWindow("mr75", TOP, tiled(TOP));
+            const bottom = makeWindow("tmux", BOTTOM, tiled(BOTTOM));
+            workspace.windowList.mockReturnValue([top, bottom]);
+            TileableWindow.get(top).initialize();
+            TileableWindow.get(bottom).initialize();
+
+            // Drag the top window's bottom edge; KWin moves the split and the bottom tile with it,
+            // ending back on the half split, both windows flush against it.
+            top.resize = true;
+            top.interactiveMoveResizeStarted.emit();
+            top.frameGeometry = rect(TOP);
+            top.frameGeometryChanged.emit();
+            bottom.frameGeometry = rect(BOTTOM);
+            bottom.frameGeometryChanged.emit();
+            expect(round(bottom.frameGeometry)).toEqual(BOTTOM);
+            top.resize = false;
+            top.interactiveMoveResizeFinished.emit();
+            flushTimers();
+
+            expect(round(top.frameGeometry)).toEqual({ x: 32, y: 32, width: 912, height: 492 });
+            expect(round(bottom.frameGeometry)).toEqual({ x: 32, y: 556, width: 912, height: 492 });
+        });
+
+        test("a window left alone during the drag is not touched afterwards", () => {
+            const w = makeWindow("kate", { x: 0, y: 0, width: 960, height: 1080 }, tiled({ x: 0, y: 0, width: 960, height: 1080 }));
+            const other = makeWindow("dolphin", { x: 960, y: 0, width: 960, height: 1080 }, tiled({ x: 960, y: 0, width: 960, height: 1080 }));
+            workspace.windowList.mockReturnValue([w, other]);
+            TileableWindow.get(w).initialize();
+            const spy = jest.spyOn(TileableWindow.get(other), "applyGaps");
+
+            w.resize = true;
+            w.interactiveMoveResizeStarted.emit();
+            w.frameGeometryChanged.emit();
+            w.resize = false;
+            w.interactiveMoveResizeFinished.emit();
+            flushTimers();
+
+            expect(spy).not.toHaveBeenCalled();
+        });
+    });
+
     describe("drop behaviour: snap into a nearby quick-tile spot, otherwise change nothing (H3, H7)", () => {
         /** Replays a mouse drag as Phase 0 logged it: Started (move or resize), geometry changes, Finished. */
         const drag = (w, { to, move = true, tileAtEnd = null }) => {
