@@ -72,12 +72,14 @@ The `contents/code/` directory contains numbered source modules that `invoke dev
 3. For each anchor, there are two snapping positions: "closed" (no gap) and "open" (with gap)
 4. If any window edge is near an anchor (within tolerance), snap it to the "open" version
 5. The gap between windows tiled side by side comes from the half/quarter anchors, which include `gapMid`; neighbouring windows are never resized
-6. Only tiled and maximized windows are gapped; floating windows are only ever changed by the drop snap
+6. An edge on a KWin tile split near no anchor (KWin keeps a split where the user last dragged it) is gapped from the split itself, `gapMid / 2` each side (`applyTileSplitGaps()`, needs `window.tile.absoluteGeometry`)
+7. Only tiled and maximized windows are gapped; floating windows are only ever changed by the drop snap
 
 ### Signal / State Management
 
 - `WindowCoordinator.block` — prevents re-entrant geometry changes
 - `WindowCoordinator.mouseDragOrResizeInProgress` — skips gap recalculation during active user drags; gaps are applied only on `moveResizedChanged` (drag complete)
+- `WindowCoordinator.skippedDuringDrag` — windows skipped during a drag (KWin resizes a tile's neighbours with it); re-gapped by `regapSkippedDuringDrag()` once the drop settles
 - Cascade state is stored on `window.interstitia_cascade_data` directly on the KWin window object
 
 ### Plasma API Compatibility

@@ -18,6 +18,12 @@ class WindowCoordinator {
         /** @type {boolean} Tracks if the user is currently dragging or resizing a window. */
         this.mouseDragOrResizeInProgress = false;
         /**
+         * Windows whose gaps were skipped because a drag or resize was in progress, by internalId.
+         * KWin moves a resized tile's neighbours along with it, so they are re-gapped when it ends.
+         * @type {Map<string, TileableWindow>}
+         */
+        this.skippedDuringDrag = new Map();
+        /**
          * Central cascade registry.
          * Map<slotKey, { slotGeometry: WindowGeometry, members: string[], output }>
          * slotKey is "x,y,w,h" of the gapped slot geometry.
@@ -49,6 +55,22 @@ class WindowCoordinator {
         allWindows.forEach((client) => {
             const tw = TileableWindow.get(client);
             if (tw) tw.applyGaps();
+        });
+    }
+
+    /**
+     * Re-gap the windows skipped while a drag or resize was in progress, except `dragged`,
+     * which the drop handling has already dealt with.
+     * @param {TileableWindow} [dragged]
+     */
+    regapSkippedDuringDrag(dragged) {
+        const pending = Array.from(this.skippedDuringDrag.values()).filter((tw) => tw !== dragged);
+        this.skippedDuringDrag.clear();
+        pending.forEach((tw) => {
+            if (tw.window) {
+                debug("drop: re-gapping", tw.getCaption(), "(moved during the drag)");
+                tw.applyGaps();
+            }
         });
     }
 }
@@ -536,6 +558,7 @@ class TileableWindow extends BaseWindow {
 
         if (coordinator.mouseDragOrResizeInProgress) {
             debug("applyGaps: skipping, drag/resize in progress", this.getCaption());
+            coordinator.skippedDuringDrag.set(this.window.internalId, this);
             return;
         }
 
@@ -603,51 +626,79 @@ class TileableWindow extends BaseWindow {
         let geo = clientGeometries[this.window.internalId];
         if (!grid || !geo) return;
 
-        // Snapping logic for each edge (left, right, top, bottom)
-        // Checks if the window edge is "near" a standard anchor point (like screen edge or half-point)
-        // and snaps it to the gapped version of that anchor.
+        // Snap each edge that is "near" a standard anchor (a screen edge, or a quarter or half
+        // point) to the gapped version of that anchor. A later anchor in a list wins over an earlier one.
+        const snapped = {};
+        const snap = (edge, anchors) => {
+            anchors.forEach(([anchor, gapSize]) => {
+                if (WindowGeometry.nearArea(geo[edge], anchor.closed, anchor.gapped, gapSize)) {
+                    geo[edge] = anchor.gapped;
+                    snapped[edge] = true;
+                }
+            });
+        };
+        snap("left", [
+            [grid.left.fullLeft, gap.left],
+            [grid.left.quarterLeft, gap.mid],
+            [grid.left.halfHorizontal, gap.mid],
+            [grid.left.quarterRight, gap.mid],
+        ]);
+        snap("right", [
+            [grid.right.fullRight, gap.right],
+            [grid.right.quarterRight, gap.mid],
+            [grid.right.halfHorizontal, gap.mid],
+            [grid.right.quarterLeft, gap.mid],
+        ]);
+        snap("top", [
+            [grid.top.fullTop, gap.top],
+            [grid.top.quarterTop, gap.mid],
+            [grid.top.halfVertical, gap.mid],
+            [grid.top.quarterBottom, gap.mid],
+        ]);
+        snap("bottom", [
+            [grid.bottom.fullBottom, gap.bottom],
+            [grid.bottom.quarterBottom, gap.mid],
+            [grid.bottom.halfVertical, gap.mid],
+            [grid.bottom.quarterTop, gap.mid],
+        ]);
 
-        if (WindowGeometry.nearArea(geo.left, grid.left.fullLeft.closed, grid.left.fullLeft.gapped, gap.left))
-            geo.left = grid.left.fullLeft.gapped;
-        if (WindowGeometry.nearArea(geo.left, grid.left.quarterLeft.closed, grid.left.quarterLeft.gapped, gap.mid))
-            geo.left = grid.left.quarterLeft.gapped;
-        if (WindowGeometry.nearArea(geo.left, grid.left.halfHorizontal.closed, grid.left.halfHorizontal.gapped, gap.mid))
-            geo.left = grid.left.halfHorizontal.gapped;
-        if (WindowGeometry.nearArea(geo.left, grid.left.quarterRight.closed, grid.left.quarterRight.gapped, gap.mid))
-            geo.left = grid.left.quarterRight.gapped;
-
-        if (WindowGeometry.nearArea(geo.right, grid.right.fullRight.closed, grid.right.fullRight.gapped, gap.right))
-            geo.right = grid.right.fullRight.gapped;
-        if (WindowGeometry.nearArea(geo.right, grid.right.quarterRight.closed, grid.right.quarterRight.gapped, gap.mid))
-            geo.right = grid.right.quarterRight.gapped;
-        if (WindowGeometry.nearArea(geo.right, grid.right.halfHorizontal.closed, grid.right.halfHorizontal.gapped, gap.mid))
-            geo.right = grid.right.halfHorizontal.gapped;
-        if (WindowGeometry.nearArea(geo.right, grid.right.quarterLeft.closed, grid.right.quarterLeft.gapped, gap.mid))
-            geo.right = grid.right.quarterLeft.gapped;
-
-        if (WindowGeometry.nearArea(geo.top, grid.top.fullTop.closed, grid.top.fullTop.gapped, gap.top))
-            geo.top = grid.top.fullTop.gapped;
-        if (WindowGeometry.nearArea(geo.top, grid.top.quarterTop.closed, grid.top.quarterTop.gapped, gap.mid))
-            geo.top = grid.top.quarterTop.gapped;
-        if (WindowGeometry.nearArea(geo.top, grid.top.halfVertical.closed, grid.top.halfVertical.gapped, gap.mid))
-            geo.top = grid.top.halfVertical.gapped;
-        if (WindowGeometry.nearArea(geo.top, grid.top.quarterBottom.closed, grid.top.quarterBottom.gapped, gap.mid))
-            geo.top = grid.top.quarterBottom.gapped;
-
-        if (WindowGeometry.nearArea(geo.bottom, grid.bottom.fullBottom.closed, grid.bottom.fullBottom.gapped, gap.bottom))
-            geo.bottom = grid.bottom.fullBottom.gapped;
-        if (WindowGeometry.nearArea(geo.bottom, grid.bottom.quarterBottom.closed, grid.bottom.quarterBottom.gapped, gap.mid))
-            geo.bottom = grid.bottom.quarterBottom.gapped;
-        if (WindowGeometry.nearArea(geo.bottom, grid.bottom.halfVertical.closed, grid.bottom.halfVertical.gapped, gap.mid))
-            geo.bottom = grid.bottom.halfVertical.gapped;
-        if (WindowGeometry.nearArea(geo.bottom, grid.bottom.quarterTop.closed, grid.bottom.quarterTop.gapped, gap.mid))
-            geo.bottom = grid.bottom.quarterTop.gapped;
+        // An edge on a tile split away from every anchor (KWin keeps a split where the user
+        // last dragged it) gets half the middle gap from the split instead.
+        this.applyTileSplitGaps(geo, snapped);
 
         // Reconstruct basic geometry from edges
         geo.x = geo.left;
         geo.y = geo.top;
         geo.width = geo.right - geo.left;
         geo.height = geo.bottom - geo.top;
+    }
+
+    /**
+     * Gap the edges of a tiled window that lie on a split between tiles but near no anchor.
+     * For a split at `s`, the edge before it goes to round(s - mid / 2) and the edge after it
+     * to that plus mid, so the two windows sharing the split end up exactly `gap.mid` apart.
+     * Edges on the work area's edge, edges already snapped to an anchor, and edges far from
+     * their tile's (a window not filling its tile) are left alone.
+     * Needs window.tile.absoluteGeometry, so a pre-6.8 quick tile known only by quickTileMode
+     * gets anchor gaps only.
+     * @param {object} geo - The draft geometry, with left/right/top/bottom; edited in place.
+     * @param {{left?: boolean, right?: boolean, top?: boolean, bottom?: boolean}} snapped
+     */
+    applyTileSplitGaps(geo, snapped) {
+        const tile = this.window.tile;
+        if (!tile || !tile.absoluteGeometry) return;
+        const t = new WindowGeometry(tile.absoluteGeometry);
+        const a = new WindowGeometry(this.getWorkArea());
+        const slack = TileableWindow.SPLIT_EDGE_SLACK;
+        const reach = gap.mid + (tile.padding || 0) + slack;
+        const before = (split) => Math.round(split - gap.mid / 2);
+        const interior = (edge, areaEdge) => Math.abs(edge - areaEdge) > slack;
+        const near = (edge, split) => Math.abs(edge - split) <= reach;
+
+        if (!snapped.left && interior(t.left, a.left) && near(geo.left, t.left)) geo.left = before(t.left) + gap.mid;
+        if (!snapped.right && interior(t.right, a.right) && near(geo.right, t.right)) geo.right = before(t.right);
+        if (!snapped.top && interior(t.top, a.top) && near(geo.top, t.top)) geo.top = before(t.top) + gap.mid;
+        if (!snapped.bottom && interior(t.bottom, a.bottom) && near(geo.bottom, t.bottom)) geo.bottom = before(t.bottom);
     }
 
     /**
@@ -734,6 +785,7 @@ class TileableWindow extends BaseWindow {
         this.window.interactiveMoveResizeStarted.connect(() => {
             debug("interactive move/resize started (mouse drag detected)", this.getCaption());
             coordinator.mouseDragOrResizeInProgress = true;
+            coordinator.skippedDuringDrag.clear();
             // Only a move can snap into a tile on drop; a resize never does.
             this._dragIsMove = Boolean(this.window.move);
             // Leave cascade group on drag start.
@@ -757,6 +809,7 @@ class TileableWindow extends BaseWindow {
             if (dropTarget) {
                 debug("drag end: joining cascade group", dropTarget);
                 TileableWindow.addToCascadeGroup(this, dropTarget);
+                coordinator.regapSkippedDuringDrag(this);
                 return;
             }
 
@@ -765,7 +818,11 @@ class TileableWindow extends BaseWindow {
             const timer = new QTimer();
             timer.interval = TileableWindow.DROP_SETTLE_MS;
             timer.singleShot = true;
-            timer.timeout.connect(() => this.afterDrop(wasMove));
+            timer.timeout.connect(() => {
+                this.afterDrop(wasMove);
+                // KWin resizes a tiled window's neighbours along with it; gap them too.
+                coordinator.regapSkippedDuringDrag(this);
+            });
             timer.start();
         });
     }
@@ -901,6 +958,8 @@ TileableWindow._instances = new Map();
 TileableWindow.SNAP_DISTANCE = 24;
 /** How long (ms) to wait after a drag ends for KWin's own tile updates to land. */
 TileableWindow.DROP_SETTLE_MS = 50;
+/** How far (px) a tile edge may be from the work area's edge and still count as on it. */
+TileableWindow.SPLIT_EDGE_SLACK = 2;
 /** The KWin workspace slot that quick-tiles the active window into each spot. */
 TileableWindow.SNAP_SLOTS = {
     left: "slotWindowQuickTileLeft",
