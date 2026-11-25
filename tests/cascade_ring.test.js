@@ -113,4 +113,45 @@ describe.each(K.APIS)("KWin $name API", (a) => {
             }
         });
     });
+
+    describe("joining and leaving", () => {
+        test("a window that joins goes just after the active one and becomes active; the others keep their places", () => {
+            const { ws, g } = ringOf(["A", "B", "C", "D"]);
+            g.activate("B");
+            const x = K.makeWindow("X", LEFT);
+            tw(x);
+
+            index().add(g, tw(x));
+
+            expect(g.ring).toEqual(["A", "B", "X", "C", "D"]);
+            expect(g.activeId()).toBe("X");
+            expect(onScreen(ws.concat([x]))).toEqual(["C", "D", "A", "B", "X"]);
+        });
+
+        test("when the active window leaves, the one just above-left of it becomes active", () => {
+            const { ws, byId, g } = ringOf(["A", "B", "C", "D"]);
+            g.activate("C");
+
+            index().remove(g, tw(byId("C")));
+
+            expect(g.ring).toEqual(["A", "B", "D"]);
+            expect(g.activeId()).toBe("B");
+            expect(onScreen(ws.filter((w) => w.internalId !== "C"))).toEqual(["D", "A", "B"]);
+        });
+
+        test("when the first window of the ring is active and leaves, the active one wraps round to the last", () => {
+            const { byId, g } = ringOf(["A", "B", "C"]);
+            g.activate("A");
+            index().remove(g, tw(byId("A")));
+            expect(g.activeId()).toBe("C");
+        });
+
+        test("when a background window leaves, the active window stays active and in front", () => {
+            const { byId, g } = ringOf(["A", "B", "C", "D"]);
+            g.activate("C");
+            index().remove(g, tw(byId("A")));
+            expect(g.activeId()).toBe("C");
+            expect(g.members).toEqual(["D", "B", "C"]);
+        });
+    });
 });
