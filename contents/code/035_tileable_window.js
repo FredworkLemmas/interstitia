@@ -294,6 +294,58 @@ class TileableWindow extends BaseWindow {
         group.cycle();
     }
 
+    // --- Activity and desktop context ---
+
+    /**
+     * A virtual desktop's id: KWin 6 hands VirtualDesktop objects, Plasma 5 numbers.
+     * @param {object|number} desktop
+     * @returns {string|number}
+     */
+    static desktopId(desktop) {
+        return desktop && typeof desktop === "object" && desktop.id !== undefined ? desktop.id : desktop;
+    }
+
+    /**
+     * The key of the current context: the current activity and virtual desktop.
+     * Cascade groups belong to one context and never reach into another.
+     * @returns {string}
+     */
+    static currentContextKey() {
+        return `${workspace.currentActivity || ""}|${TileableWindow.desktopId(workspace.currentDesktop)}`;
+    }
+
+    /**
+     * True when the window is on the current activity (or on all of them).
+     * @returns {boolean}
+     */
+    isOnCurrentActivity() {
+        const activities = this.window.activities;
+        const current = workspace.currentActivity;
+        if (!activities || activities.length === 0 || !current) return true;
+        return Array.from(activities).some((a) => a == current);
+    }
+
+    /**
+     * True when the window is on the current virtual desktop (or on all of them).
+     * @returns {boolean}
+     */
+    isOnCurrentDesktop() {
+        if (this.window.onAllDesktops) return true;
+        const desktops = this.getDesktops();
+        const current = workspace.currentDesktop;
+        if (!desktops || desktops.length === 0 || current === undefined || current === null) return true;
+        const id = TileableWindow.desktopId(current);
+        return Array.from(desktops).some((d) => TileableWindow.desktopId(d) == id);
+    }
+
+    /**
+     * True when the window is on the current activity and the current virtual desktop.
+     * @returns {boolean}
+     */
+    isOnCurrentContext() {
+        return this.isOnCurrentActivity() && this.isOnCurrentDesktop();
+    }
+
     // --- Utilities (from 04_windowing.js) ---
 
     /**
@@ -687,15 +739,17 @@ class TileableWindow extends BaseWindow {
     /**
      * Look for a cascade group whose slot detection zone contains this window's center.
      * The detection zone is the center half of the slot (25%–75% on each axis).
-     * Only considers groups on the same output and desktop.
+     * Only considers groups of the current activity and desktop, on the same output.
      * @returns {string|null} The matching slot key, or null.
      */
     _findCascadeDropTarget() {
         const fg = this.window.frameGeometry;
         const centerX = fg.x + fg.width / 2;
         const centerY = fg.y + fg.height / 2;
+        const ctx = TileableWindow.currentContextKey();
 
         for (const [key, group] of coordinator.cascadeGroups) {
+            if (group.ctx !== ctx) continue;
             const slot = group.slotGeometry;
             const zoneX = slot.x + slot.width / 4;
             const zoneY = slot.y + slot.height / 4;
@@ -922,12 +976,14 @@ class CascadeGroup {
      * @param {WindowGeometry} slotGeometry - The base geometry of the slot.
      * @param {string[]} members - Array of internalIds of windows in the group.
      * @param {object|number} output - The output/screen the group is on.
+     * @param {string} [ctx] - The activity and desktop the group belongs to (TileableWindow.currentContextKey()).
      */
-    constructor(key, slotGeometry, members, output) {
+    constructor(key, slotGeometry, members, output, ctx = TileableWindow.currentContextKey()) {
         this.key = key;
         this.slotGeometry = slotGeometry;
         this.members = members;
         this.output = output;
+        this.ctx = ctx;
     }
 
     /**

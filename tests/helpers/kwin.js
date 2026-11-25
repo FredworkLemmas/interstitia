@@ -24,6 +24,8 @@ const DESKTOPS = [
     { id: "desk-2", name: "Desktop 2" },
 ];
 const ACTIVITIES = ["act-A", "act-B"];
+/** Outputs are shared objects, as KWin hands the same Output to every window on it. */
+const OUTPUTS = [{ name: "DP-1" }, { name: "DP-2" }];
 
 /** A 1920x1080 work area. */
 const AREA = { x: 0, y: 0, width: 1920, height: 1080 };
@@ -139,7 +141,7 @@ const makeWindow = (id, geo, extra = {}) => {
         internalId: id,
         caption: id,
         resourceClass: "app-" + id,
-        output: { name: "DP-1" },
+        output: OUTPUTS[0],
         desktops: [DESKTOPS[0]],
         activities: [ACTIVITIES[0]],
         onAllDesktops: false,
@@ -202,6 +204,7 @@ module.exports = {
     APIS,
     ACTIVITIES,
     DESKTOPS,
+    OUTPUTS,
     AREA,
     signal,
     rect,
