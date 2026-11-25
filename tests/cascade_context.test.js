@@ -152,4 +152,38 @@ describe.each(K.APIS)("KWin $name API", (a) => {
             expect(groupA.members).toEqual(["a2", "a1"]);
         });
     });
+
+    describe("starting a group takes only windows on the current activity and desktop", () => {
+        const ids = (tws) => tws.map((tw) => tw.window.internalId).sort();
+
+        test("a window on activities A and B does not pick up a window only on A while B is current", () => {
+            const x = K.makeWindow("x", LEFT, { activities: ["act-A", "act-B"] });
+            const y = K.makeWindow("y", LEFT, { activities: ["act-A"] });
+            const z = K.makeWindow("z", LEFT, { activities: ["act-B"] });
+            workspace.windowList.mockImplementation(() => [x, y, z]);
+            K.switchActivity("act-B");
+            workspace.activeWindow = x;
+
+            expect(ids(ActiveWindow.getActive().selectSameSlotWindows())).toEqual(["x", "z"]);
+        });
+
+        test("a window on all desktops does not pick up a window on another desktop", () => {
+            const x = K.makeWindow("x", LEFT, { desktops: [], onAllDesktops: true });
+            const y = K.makeWindow("y", LEFT, { desktops: [K.DESKTOPS[1]] });
+            const z = K.makeWindow("z", LEFT);
+            workspace.windowList.mockImplementation(() => [x, y, z]);
+            workspace.activeWindow = x;
+
+            expect(ids(ActiveWindow.getActive().selectSameSlotWindows())).toEqual(["x", "z"]);
+        });
+
+        test("a window on all activities in the same spot is picked up", () => {
+            const x = K.makeWindow("x", LEFT);
+            const y = K.makeWindow("y", LEFT, { activities: [] });
+            workspace.windowList.mockImplementation(() => [x, y]);
+            workspace.activeWindow = x;
+
+            expect(ids(ActiveWindow.getActive().selectSameSlotWindows())).toEqual(["x", "y"]);
+        });
+    });
 });

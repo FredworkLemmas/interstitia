@@ -1128,8 +1128,8 @@ class ActiveWindow extends TileableWindow {
     }
 
     /**
-     * Select all windows that occupy the same slot as this window via geometry scan.
-     * Used only when creating a new cascade group (before the registry exists for this slot).
+     * Select all windows on the current activity and desktop that occupy the same slot as this
+     * window, via geometry scan. Used only when creating a new cascade group (before the registry exists for this slot).
      * @returns {TileableWindow[]} The windows in the same slot.
      */
     selectSameSlotWindows() {
@@ -1139,7 +1139,7 @@ class ActiveWindow extends TileableWindow {
         const sameSlotWindows = [];
         allWindows.forEach((window) => {
             const tw = TileableWindow.get(window);
-            if (this.isOnSameDesktop(tw) && this.isOnSameActivity(tw) && new WindowGeometry(fg).nearlyEquals(window.frameGeometry)) {
+            if (tw.isOnCurrentContext() && new WindowGeometry(fg).nearlyEquals(window.frameGeometry)) {
                 debug("selectSameSlotWindows: found", tw.getCaption(), JSON.stringify(window.frameGeometry));
                 sameSlotWindows.push(tw);
             }
