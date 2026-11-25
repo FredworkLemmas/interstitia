@@ -113,4 +113,43 @@ describe.each(K.APIS)("KWin $name API", (a) => {
             expect(TileableWindow.get(a3).getCascadeGroup()).toBe(TileableWindow.get(a1).getCascadeGroup());
         });
     });
+
+    describe("groups in the same spot on different activities or desktops are separate", () => {
+        test("starting a group on activity B leaves the group in the same spot on activity A intact", () => {
+            const a1 = K.makeWindow("a1", LEFT);
+            const a2 = K.makeWindow("a2", LEFT);
+            const b1 = K.makeWindow("b1", LEFT, { activities: ["act-B"] });
+            const b2 = K.makeWindow("b2", LEFT, { activities: ["act-B"] });
+            const all = [a1, a2, b1, b2];
+            cascade(a1, all);
+            const groupA = TileableWindow.get(a1).getCascadeGroup();
+
+            K.switchActivity("act-B");
+            cascade(b1, all);
+            const groupB = TileableWindow.get(b1).getCascadeGroup();
+
+            expect(groupB).not.toBe(groupA);
+            expect(coordinator.cascadeGroups.size).toBe(2);
+            expect(TileableWindow.get(a1).getCascadeGroup()).toBe(groupA);
+            expect(groupA.members).toEqual(["a2", "a1"]);
+            expect(groupB.members).toEqual(["b2", "b1"]);
+        });
+
+        test("starting a group on desktop 2 leaves the group in the same spot on desktop 1 intact", () => {
+            const a1 = K.makeWindow("a1", LEFT);
+            const a2 = K.makeWindow("a2", LEFT);
+            const b1 = K.makeWindow("b1", LEFT, { desktops: [K.DESKTOPS[1]] });
+            const b2 = K.makeWindow("b2", LEFT, { desktops: [K.DESKTOPS[1]] });
+            const all = [a1, a2, b1, b2];
+            cascade(a1, all);
+            const groupA = TileableWindow.get(a1).getCascadeGroup();
+
+            K.switchDesktop(K.DESKTOPS[1]);
+            cascade(b1, all);
+
+            expect(coordinator.cascadeGroups.size).toBe(2);
+            expect(TileableWindow.get(a1).getCascadeGroup()).toBe(groupA);
+            expect(groupA.members).toEqual(["a2", "a1"]);
+        });
+    });
 });

@@ -1182,12 +1182,14 @@ class ActiveWindow extends TileableWindow {
 
         // Use this window's stored gapped geometry as the slot origin.
         const slotGeo = this.window.interstitia_applyGapsGeometry || new WindowGeometry(this.window.frameGeometry);
-        const key = WindowGeometry.slotKey(slotGeo);
+        // The key carries the activity and desktop, so groups in the same spot elsewhere never collide.
+        const ctx = TileableWindow.currentContextKey();
+        const key = `${ctx}@${WindowGeometry.slotKey(slotGeo)}`;
 
         debug("startCascade: creating cascade group", key, "with", sameSlotWindows.length, "windows");
 
         const memberIds = sameSlotWindows.map((tw) => tw.window.internalId);
-        const group = new CascadeGroup(key, slotGeo, memberIds, this.getOutput());
+        const group = new CascadeGroup(key, slotGeo, memberIds, this.getOutput(), ctx);
         coordinator.cascadeGroups.set(key, group);
 
         sameSlotWindows.forEach((tw) => {
