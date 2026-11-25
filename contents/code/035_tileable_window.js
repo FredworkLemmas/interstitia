@@ -991,12 +991,21 @@ class ActiveWindow extends TileableWindow {
             const s = tw.refreshSpot();
             if (s && s.position === spot.position) same.push(tw);
         });
+        // The ring starts in stacking order, bottom to top, when KWin reports it.
+        const stack = Array.isArray(workspace.stackingOrder) ? workspace.stackingOrder : null;
+        if (stack) {
+            const rank = (tw) => {
+                const i = stack.indexOf(tw.window);
+                return i < 0 ? stack.length : i;
+            };
+            same.sort((p, q) => rank(p) - rank(q));
+        }
         return same;
     }
 
     /**
-     * Ctrl+}. In a group: the front window cycles the group (the top-left window comes to the
-     * front); a background member comes to the front. Not in a group: join the group in this
+     * Ctrl+}. In a group: on the active window it brings the top-left window to the front (the
+     * ring rotates by one); on any other member it makes that member active. Not in a group: join the group in this
      * window's spot, or start one from the windows sharing the spot.
      */
     startCascade() {
@@ -1004,8 +1013,8 @@ class ActiveWindow extends TileableWindow {
         const index = coordinator.cascades;
         const group = this.getCascadeGroup();
         if (group) {
-            if (group.members[group.members.length - 1] === this.window.internalId) group.cycle();
-            else group.reapply(this.window.internalId);
+            if (group.activeId() === this.window.internalId) group.cycle();
+            else group.activate(this.window.internalId);
             return;
         }
 

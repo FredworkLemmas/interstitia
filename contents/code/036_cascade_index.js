@@ -1,6 +1,9 @@
 /**
  * CascadeGroup Class
  * A group of windows cascaded in one tile spot, in one context (activity and virtual desktop).
+ * The windows form a ring in a fixed order, with a pointer to the active one. The active window
+ * is always bottom-right and in front; the others run from top-left after it round the ring, so
+ * activating another window rotates the layout without ever changing the order.
  * Its slot geometry is worked out from its output and spot whenever it is laid out, so a
  * resolution or panel change never leaves it stale.
  */
@@ -9,13 +12,70 @@ class CascadeGroup {
      * @param {string} ctx - The context key (TileableWindow.currentContextKey()) the group belongs to.
      * @param {string|number} output - The output's name.
      * @param {string} position - The named spot (left, topRight, maximize, ...).
-     * @param {string[]} members - Window internalIds, back (top-left) to front (bottom-right).
+     * @param {string[]} [ring] - Window internalIds in ring order.
+     * @param {number} [active] - Index into `ring` of the active window (the last by default).
      */
-    constructor(ctx, output, position, members) {
+    constructor(ctx, output, position, ring = [], active = ring.length - 1) {
         this.ctx = ctx;
         this.output = output;
         this.position = position;
-        this.members = members.slice();
+        /** @type {string[]} Window internalIds in their fixed order. */
+        this.ring = ring.slice();
+        /** @type {number} Index into `ring` of the active (bottom-right, front) window. */
+        this.active = Math.max(0, active);
+    }
+
+    /**
+     * The windows in layout order, top-left (back) to bottom-right (front):
+     * ring[active + 1], ring[active + 2], ... round to ring[active].
+     * @returns {string[]}
+     */
+    get members() {
+        const n = this.ring.length;
+        const out = [];
+        for (let k = 1; k <= n; k++) out.push(this.ring[(this.active + k) % n]);
+        return out;
+    }
+
+    /** The active window's internalId, or null for an empty group. */
+    activeId() {
+        return this.ring.length ? this.ring[this.active] : null;
+    }
+
+    /** @param {string} id */
+    has(id) {
+        return this.ring.includes(id);
+    }
+
+    /**
+     * Put a window into the ring just after the active one, and make it active, so the others
+     * keep their order and their places.
+     * @param {string} id
+     */
+    insert(id) {
+        if (this.has(id)) return;
+        if (this.ring.length === 0) {
+            this.ring.push(id);
+            this.active = 0;
+            return;
+        }
+        this.ring.splice(this.active + 1, 0, id);
+        this.active += 1;
+    }
+
+    /**
+     * Take a window out of the ring. If it was active, the window before it in the ring (the one
+     * just above-left of it) becomes active.
+     * @param {string} id
+     */
+    drop(id) {
+        const j = this.ring.indexOf(id);
+        if (j < 0) return;
+        this.ring.splice(j, 1);
+        const n = this.ring.length;
+        if (n === 0) this.active = 0;
+        else if (j < this.active) this.active -= 1;
+        else if (j === this.active) this.active = (j - 1 + n) % n;
     }
 
     /** A readable name for logs. */
@@ -33,6 +93,14 @@ class CascadeGroup {
      * @returns {TileableWindow[]}
      */
     windows() {
+        return this.ring.map((id) => TileableWindow._instances.get(id)).filter(Boolean);
+    }
+
+    /**
+     * The members' TileableWindow instances in layout order, top-left to bottom-right.
+     * @returns {TileableWindow[]}
+     */
+    ordered() {
         return this.members.map((id) => TileableWindow._instances.get(id)).filter(Boolean);
     }
 
@@ -46,15 +114,24 @@ class CascadeGroup {
     }
 
     /**
-     * Lay the group out with `activeId` at the front (bottom-right), the others keeping their order.
-     * Only the showing context's groups are laid out; others are laid out when their context shows.
-     * @param {string|null} activeId - The window to put in front, or null to keep the current order.
+     * Make `id` the active window and lay the group out: it goes bottom-right and in front, and
+     * the ring rotates round it. Only the showing context's groups are laid out; others are laid
+     * out when their context shows.
+     * @param {string} id
+     */
+    activate(id) {
+        const j = this.ring.indexOf(id);
+        if (j >= 0) this.active = j;
+        this.layout();
+    }
+
+    /**
+     * Lay the group out, first making `activeId` active if given.
+     * @param {string|null} activeId
      */
     reapply(activeId) {
-        if (activeId && this.members.includes(activeId)) {
-            this.members = this.members.filter((id) => id !== activeId).concat([activeId]);
-        }
-        this.layout();
+        if (activeId) this.activate(activeId);
+        else this.layout();
     }
 
     /**
@@ -64,7 +141,7 @@ class CascadeGroup {
     layout() {
         if (!this.isCurrent()) return;
         const slot = this.slotGeometry();
-        const windows = this.windows();
+        const windows = this.ordered();
         if (!slot || windows.length === 0) return;
         const step = CascadeGroup.STEP;
         const n = windows.length;
@@ -84,7 +161,7 @@ class CascadeGroup {
         if (!this.isCurrent()) return;
         const slot = this.slotGeometry();
         if (!slot) return;
-        this._place(this.windows(), () => ({ x: slot.x, y: slot.y, width: slot.width, height: slot.height }));
+        this._place(this.ordered(), () => ({ x: slot.x, y: slot.y, width: slot.width, height: slot.height }));
     }
 
     /**
@@ -122,9 +199,9 @@ class CascadeGroup {
      * Ctrl+}: bring the top-left (rear) window to the front.
      */
     cycle() {
-        if (this.members.length <= 1) return;
+        if (this.ring.length <= 1) return;
         debug("CascadeGroup.cycle:", this.key);
-        this.reapply(this.members[0]);
+        this.activate(this.ring[(this.active + 1) % this.ring.length]);
     }
 }
 
@@ -216,7 +293,7 @@ class CascadeIndex {
             if (!tw) return;
             const old = tw.cascade.groups.get(ctx);
             if (old && old !== group) this.remove(old, tw);
-            if (!group.members.includes(id)) group.members.push(id);
+            group.insert(id);
             tw.cascade.groups.set(ctx, group);
         });
         debug("CascadeIndex.create:", group.key, "with", group.members.length, "windows");
@@ -233,7 +310,7 @@ class CascadeIndex {
         const id = tw.window.internalId;
         const old = tw.cascade.groups.get(group.ctx);
         if (old && old !== group) this.remove(old, tw);
-        if (!group.members.includes(id)) group.members.push(id);
+        group.insert(id);
         tw.cascade.groups.set(group.ctx, group);
         debug("CascadeIndex.add:", tw.getCaption(), "to", group.key);
         group.reapply(id);
@@ -247,7 +324,7 @@ class CascadeIndex {
     remove(group, tw) {
         this._detach(group, tw);
         debug("CascadeIndex.remove:", tw.getCaption(), "from", group.key, "remaining:", group.members.length);
-        if (group.members.length <= 1) this.dissolve(group);
+        if (group.ring.length <= 1) this.dissolve(group);
         else group.reapply(null);
     }
 
@@ -261,7 +338,8 @@ class CascadeIndex {
         group.windows().forEach((tw) => {
             if (tw.cascade.groups.get(group.ctx) === group) tw.cascade.groups.delete(group.ctx);
         });
-        group.members = [];
+        group.ring = [];
+        group.active = 0;
         const spots = this.contexts.get(group.ctx);
         if (spots) {
             const key = CascadeIndex.spotKey(group.output, group.position);
@@ -290,7 +368,7 @@ class CascadeIndex {
      */
     _detach(group, tw) {
         const id = tw.window.internalId;
-        group.members = group.members.filter((m) => m !== id);
+        group.drop(id);
         if (tw.cascade.groups.get(group.ctx) === group) tw.cascade.groups.delete(group.ctx);
     }
 }

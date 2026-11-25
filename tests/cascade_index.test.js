@@ -193,12 +193,13 @@ describe.each(K.APIS)("KWin $name API", (a) => {
 
             index().create(ctxA, "DP-1", "left", ["w1", "w2", "w3"], "w2");
 
+            // The ring is w1 w2 w3 with w2 active: w3 and w1 follow it round, top-left first.
             const g = index().groupAt(ctxA, "DP-1", "left");
-            expect(g.members).toEqual(["w1", "w3", "w2"]);
-            expect(K.round(ws[0].frameGeometry)).toEqual(stepGeo(LEFT, 0, 3));
-            expect(K.round(ws[2].frameGeometry)).toEqual(stepGeo(LEFT, 1, 3));
+            expect(g.members).toEqual(["w3", "w1", "w2"]);
+            expect(K.round(ws[2].frameGeometry)).toEqual(stepGeo(LEFT, 0, 3));
+            expect(K.round(ws[0].frameGeometry)).toEqual(stepGeo(LEFT, 1, 3));
             expect(K.round(ws[1].frameGeometry)).toEqual(stepGeo(LEFT, 2, 3));
-            expect(raised).toEqual(["w1", "w3", "w2"]);
+            expect(raised).toEqual(["w3", "w1", "w2"]);
         });
 
         test("workspace.raiseWindow is used for the stacking when KWin has it", () => {
@@ -245,7 +246,8 @@ describe.each(K.APIS)("KWin $name API", (a) => {
 
             const g = index().groupOf(tw(w2));
             expect(g.position).toBe("left");
-            expect(g.members).toEqual(["w1", "w3", "w2"]);
+            expect(g.ring).toEqual(["w1", "w2", "w3"]);
+            expect(g.members).toEqual(["w3", "w1", "w2"]);
             expect(index().groupOf(tw(other))).toBeNull();
         });
 
@@ -290,14 +292,14 @@ describe.each(K.APIS)("KWin $name API", (a) => {
             expect(g.members).toEqual(["A", "B", "C", "D"]);
         });
 
-        test("Ctrl+} on a background member brings it to the front", () => {
+        test("Ctrl+} on a background member makes it active, rotating the ring", () => {
             const ws = windowsIn(["A", "B", "C"]);
             workspace.windowList.mockImplementation(() => ws);
             press(ws[2]);
 
             press(ws[1]);
 
-            expect(index().groupOf(tw(ws[1])).members).toEqual(["A", "C", "B"]);
+            expect(index().groupOf(tw(ws[1])).members).toEqual(["C", "A", "B"]);
         });
 
         test("Ctrl+} on a window that is in a group's spot but not in the group adds it", () => {
