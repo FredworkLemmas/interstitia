@@ -46,7 +46,7 @@ global.gap = { left: 32, right: 32, top: 32, bottom: 32, mid: 32 };
 global.panel = { left: false, right: false, top: false, bottom: false };
 global.config = { includeMaximized: true, excludeMode: true, includeMode: false, applications: [] };
 
-["contents/code/034_geometry.js", "contents/code/035_tileable_window.js"].forEach((file) => {
+["contents/code/034_geometry.js", "contents/code/035_tileable_window.js", "contents/code/036_cascade_index.js"].forEach((file) => {
     eval.call(global, fs.readFileSync(path.join(__dirname, "..", file), "utf8"));
 });
 
@@ -121,7 +121,7 @@ beforeEach(() => {
     jest.clearAllMocks();
     timers.length = 0;
     TileableWindow._instances.clear();
-    coordinator.cascadeGroups.clear();
+    coordinator.cascades.clear();
     coordinator.block = false;
     coordinator.mouseDragOrResizeInProgress = false;
     workspace.activeWindow = null;

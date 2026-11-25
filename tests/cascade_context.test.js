@@ -5,9 +5,12 @@
 const K = require("./helpers/kwin");
 
 K.installKWin();
-K.load(["contents/code/034_geometry.js", "contents/code/035_tileable_window.js"]);
+K.load(["contents/code/034_geometry.js", "contents/code/035_tileable_window.js", "contents/code/036_cascade_index.js"]);
 
 const LEFT = { x: 32, y: 32, width: 912, height: 1016 };
+
+/** How many cascade groups exist, in every context. */
+const groupCount = () => Array.from(coordinator.cascades.contexts.values()).reduce((n, spots) => n + spots.size, 0);
 
 /** Record every window the script makes active. */
 const trackActivations = () => {
@@ -129,8 +132,8 @@ describe.each(K.APIS)("KWin $name API", (a) => {
             const groupB = TileableWindow.get(b1).getCascadeGroup();
 
             expect(groupB).not.toBe(groupA);
-            expect(coordinator.cascadeGroups.size).toBe(2);
-            expect(TileableWindow.get(a1).getCascadeGroup()).toBe(groupA);
+            expect(groupCount()).toBe(2);
+            expect(coordinator.cascades.groupOf(TileableWindow.get(a1), groupA.ctx)).toBe(groupA);
             expect(groupA.members).toEqual(["a2", "a1"]);
             expect(groupB.members).toEqual(["b2", "b1"]);
         });
@@ -147,14 +150,18 @@ describe.each(K.APIS)("KWin $name API", (a) => {
             K.switchDesktop(K.DESKTOPS[1]);
             cascade(b1, all);
 
-            expect(coordinator.cascadeGroups.size).toBe(2);
-            expect(TileableWindow.get(a1).getCascadeGroup()).toBe(groupA);
+            expect(groupCount()).toBe(2);
+            expect(coordinator.cascades.groupOf(TileableWindow.get(a1), groupA.ctx)).toBe(groupA);
             expect(groupA.members).toEqual(["a2", "a1"]);
         });
     });
 
     describe("starting a group takes only windows on the current activity and desktop", () => {
         const ids = (tws) => tws.map((tw) => tw.window.internalId).sort();
+        const sameSlot = () => {
+            const active = ActiveWindow.getActive();
+            return active.selectSameSlotWindows(active.refreshSpot());
+        };
 
         test("a window on activities A and B does not pick up a window only on A while B is current", () => {
             const x = K.makeWindow("x", LEFT, { activities: ["act-A", "act-B"] });
@@ -164,7 +171,7 @@ describe.each(K.APIS)("KWin $name API", (a) => {
             K.switchActivity("act-B");
             workspace.activeWindow = x;
 
-            expect(ids(ActiveWindow.getActive().selectSameSlotWindows())).toEqual(["x", "z"]);
+            expect(ids(sameSlot())).toEqual(["x", "z"]);
         });
 
         test("a window on all desktops does not pick up a window on another desktop", () => {
@@ -174,7 +181,7 @@ describe.each(K.APIS)("KWin $name API", (a) => {
             workspace.windowList.mockImplementation(() => [x, y, z]);
             workspace.activeWindow = x;
 
-            expect(ids(ActiveWindow.getActive().selectSameSlotWindows())).toEqual(["x", "z"]);
+            expect(ids(sameSlot())).toEqual(["x", "z"]);
         });
 
         test("a window on all activities in the same spot is picked up", () => {
@@ -183,7 +190,7 @@ describe.each(K.APIS)("KWin $name API", (a) => {
             workspace.windowList.mockImplementation(() => [x, y]);
             workspace.activeWindow = x;
 
-            expect(ids(ActiveWindow.getActive().selectSameSlotWindows())).toEqual(["x", "y"]);
+            expect(ids(sameSlot())).toEqual(["x", "y"]);
         });
     });
 });

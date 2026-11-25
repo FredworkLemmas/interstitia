@@ -88,15 +88,6 @@ class WindowGeometry {
     }
 
     /**
-     * Produce a stable slot key string from a geometry object.
-     * @param {object} geo
-     * @returns {string}
-     */
-    static slotKey(geo) {
-        return `${Math.round(geo.x)},${Math.round(geo.y)},${Math.round(geo.width)},${Math.round(geo.height)}`;
-    }
-
-    /**
      * Create a deep copy of this geometry.
      * @returns {WindowGeometry} A new instance with the same values.
      */

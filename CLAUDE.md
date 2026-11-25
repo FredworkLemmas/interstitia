@@ -48,7 +48,8 @@ The `contents/code/` directory contains numbered source modules that `invoke dev
 | `020_logging.js` | `debug()` / `fulldebug()` utilities |
 | `030_config.js` | Config loading from KDE settings with multi-API fallback |
 | `034_geometry.js` | `WindowGeometry` value object (x, y, width, height, and derived edges) and static geometry helpers, including `pickSnapTarget` |
-| `035_tileable_window.js` | Core logic: `WindowCoordinator`, `BaseWindow`, `TileableWindow`, `CascadeGroup`, `ActiveWindow` |
+| `035_tileable_window.js` | Core logic: `WindowCoordinator`, `BaseWindow`, `TileableWindow`, `ActiveWindow` |
+| `036_cascade_index.js` | Cascade groups: `CascadeGroup` and `CascadeIndex` (sets `coordinator.cascades`) |
 | `070_reaction.js` | Workspace signal wiring (`onRelayouted`) |
 | `080_main_loop.js` | Entry point: config load, shortcut registration, window init |
 
@@ -63,7 +64,15 @@ The `contents/code/` directory contains numbered source modules that `invoke dev
 - `shouldIgnore()` — checks window against app blacklist/whitelist
 - `initialize()` / `setupGeometrySignals()` — connects KWin signals for this window
 
-**`ActiveWindow`** (extends `TileableWindow`) — handles the cascade feature: finding windows occupying the same slot and offsetting them to reveal stacked title bars.
+**`ActiveWindow`** (extends `TileableWindow`) — the Ctrl+} / Ctrl+{ shortcuts: `startCascade()` / `stopCascade()`. It shares its window's `cascade` data with the cached `TileableWindow`.
+
+### Cascade groups (in `036_cascade_index.js`)
+
+- Each `TileableWindow` keeps `this.cascade = { spot, groups }`: `spot` is `{ output, position }` (output name; position `left`, `right`, `top`, `bottom`, `topLeft`, `topRight`, `bottomLeft`, `bottomRight`, `maximize`) or null when floating, from `computeSpot()`; `groups` maps a context key to the window's group there.
+- A context is the current activity and virtual desktop (`TileableWindow.currentContextKey()`, `activity|desktopId`). Groups never reach across contexts; a window on several activities or desktops can be in a different group on each.
+- **`CascadeIndex`** (`coordinator.cascades`): `contexts` is `Map<ctx, Map<"output|position", CascadeGroup>>`. Lookups (`groupOf`, `groupAt`, `groupsIn`) never scan other windows. Only `create`/`add`/`remove`/`dissolve`/`removeWindow` write the index or the windows' back-references.
+- **`CascadeGroup`**: `ctx`, `output`, `position`, `members` (back to front). Its slot geometry comes from its spot each time it is laid out; only groups of the showing context are laid out, writing only geometry that changes, with `coordinator.cascadeLayout` set.
+- No cascade data is stored on KWin window objects.
 
 ### Gap Algorithm
 
@@ -78,7 +87,8 @@ The `contents/code/` directory contains numbered source modules that `invoke dev
 
 - `WindowCoordinator.block` — prevents re-entrant geometry changes
 - `WindowCoordinator.mouseDragOrResizeInProgress` — skips gap recalculation during active user drags; gaps are applied only on `moveResizedChanged` (drag complete)
-- Cascade state is stored on `window.interstitia_cascade_data` directly on the KWin window object
+- `WindowCoordinator.cascadeLayout` — true while a cascade group moves and raises its own windows
+- A window's spot is refreshed `DROP_SETTLE_MS` after tile, output and maximize changes (`setupSpotSignals()`); a member whose spot changed leaves its group
 
 ### Plasma API Compatibility
 

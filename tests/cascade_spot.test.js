@@ -5,7 +5,7 @@
 const K = require("./helpers/kwin");
 
 K.installKWin();
-K.load(["contents/code/034_geometry.js", "contents/code/035_tileable_window.js"]);
+K.load(["contents/code/034_geometry.js", "contents/code/035_tileable_window.js", "contents/code/036_cascade_index.js"]);
 
 beforeEach(() => K.reset());
 
