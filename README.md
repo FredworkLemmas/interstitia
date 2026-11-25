@@ -59,12 +59,17 @@ Resizing a window never snaps it.
 
 ### Cascading Windows
 
-Interstitia includes a feature to "cascade" windows that occupy the same tiling slot (same size and position). This is useful when you have multiple windows stacked on top of each other and want to see them all at once without moving them.
+Interstitia can "cascade" windows that share a tile spot (a half, a quarter, the top or bottom half, or maximized), offsetting each by 32 pixels so you can see every title bar in the stack.
 
-*   **Start Cascade (`Ctrl+}`):** Resizes and offsets windows in the current slot by 32 pixels, allowing you to see the title bars and edges of all windows in the stack. Keep pressing the key combo to cycle thru the windows in the cascade group.
-*   **Stop Cascade (`Ctrl+{`):** Resets all windows in the slot to their original tiled position and size.
+*   **Start Cascade (`Ctrl+}`):** Cascades the windows in the active window's spot. Pressing it again brings the top-left window to the front, so repeated presses walk round the whole group.
+*   **Stop Cascade (`Ctrl+{`):** Puts every window in the group back on the full spot, with the active window on top.
 
-The cascade state is automatically cleared if you manually move or resize a window, ensuring the script doesn't interfere with your manual window management.
+A cascade group keeps its windows in a fixed order. The active window is always the one furthest down and to the right. Focusing another window in the group (clicking it, or Alt+Tab) rotates the group after a short pause: the windows that were below and to the right of it move round to the top-left, in order, and it takes the bottom-right place. If you press on a window's title bar and drag it, it leaves the group without moving first.
+
+*   **Joining:** drop a window onto a group, or move it into the group's spot with `Meta`+arrow keys. It joins at the bottom-right.
+*   **Leaving:** drag a window out, move it to another spot with `Meta`+arrow keys, maximize it, or close it.
+
+Cascade groups belong to one activity and one virtual desktop. Groups in the same spot on different activities or desktops never affect each other, and a window that is on several activities can be in a different group on each. Switching activity or desktop lays out that activity's and desktop's groups.
 
 ## Configuration
 
