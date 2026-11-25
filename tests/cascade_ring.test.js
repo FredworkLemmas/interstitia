@@ -76,4 +76,41 @@ describe.each(K.APIS)("KWin $name API", (a) => {
     test("CascadeGroup.STEP is the 32 px cascade offset", () => {
         expect(CascadeGroup.STEP).toBe(32);
     });
+
+    describe("Ctrl+}", () => {
+        const press = (w) => {
+            workspace.activeWindow = w;
+            ActiveWindow.getActive().startCascade();
+        };
+
+        test("on the active window it brings the top-left window to the front, the ring rotating by one", () => {
+            const { ws, byId, g } = ringOf(["A", "B", "C", "D"]);
+            press(byId("D"));
+            expect(onScreen(ws)).toEqual(["B", "C", "D", "A"]);
+            expect(g.activeId()).toBe("A");
+        });
+
+        test("pressed repeatedly on whatever is in front, it walks round the whole ring and back", () => {
+            const { ws, byId, g } = ringOf(["A", "B", "C", "D"]);
+            const fronts = [];
+            for (let i = 0; i < 4; i++) {
+                press(byId(g.activeId()));
+                fronts.push(g.activeId());
+            }
+            expect(fronts).toEqual(["A", "B", "C", "D"]);
+            expect(onScreen(ws)).toEqual(["A", "B", "C", "D"]);
+        });
+
+        test("starting a group takes the ring order from KWin's stacking order, bottom to top", () => {
+            const ws = ["A", "B", "C"].map((id) => K.makeWindow(id, LEFT));
+            workspace.windowList.mockImplementation(() => ws);
+            workspace.stackingOrder = [ws[2], ws[0], ws[1]];
+            try {
+                press(ws[1]);
+                expect(index().groupOf(tw(ws[1])).ring).toEqual(["C", "A", "B"]);
+            } finally {
+                delete workspace.stackingOrder;
+            }
+        });
+    });
 });
