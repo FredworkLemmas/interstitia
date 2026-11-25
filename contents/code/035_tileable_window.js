@@ -221,6 +221,13 @@ class TileableWindow extends BaseWindow {
      */
     constructor(window) {
         super(window);
+        /**
+         * Interstitia's own cascade data for this window.
+         * spot: the tile spot from the last refresh, `{ output, position }`, or null when floating.
+         * groups: the cascade group the window is in for each context (activity and desktop).
+         * @type {{spot: ({output: string, position: string}|null), groups: Map<string, CascadeGroup>}}
+         */
+        this.cascade = { spot: null, groups: new Map() };
     }
 
     /**
@@ -776,7 +783,9 @@ class TileableWindow extends BaseWindow {
     initialize() {
         debug("added", this.getCaption());
         this.applyGaps();
+        this.refreshSpot();
         this.setupGeometrySignals();
+        this.setupSpotSignals();
         this.setupMouseDragTracking();
     }
 
@@ -864,6 +873,136 @@ class TileableWindow extends BaseWindow {
             spot("bottomRight", ["right", "bottom"], LH, R, TH, B),
             spot("maximize", ["left", "right", "top", "bottom"], L, R, T, B),
         ];
+    }
+
+    // --- Tile spot ---
+
+    /**
+     * The spots a cascade group can occupy: the quick-tile snap candidates plus the top and
+     * bottom halves (which KWin can quick-tile, but a drop never snaps into).
+     * @returns {Array<{name: string, sides: string[], closed: object, gapped: object}>}
+     */
+    getSpotCandidates() {
+        const g = this.getGridAnchors();
+        const L = g.left.fullLeft, R = g.right.fullRight;
+        const T = g.top.fullTop, TH = g.top.halfVertical;
+        const B = g.bottom.fullBottom, BH = g.bottom.halfVertical;
+        const spot = (name, left, right, top, bottom) => ({
+            name,
+            closed: { left: left.closed, right: right.closed, top: top.closed, bottom: bottom.closed },
+            gapped: { left: left.gapped, right: right.gapped, top: top.gapped, bottom: bottom.gapped },
+        });
+        return this.getSnapCandidates().concat([spot("top", L, R, T, BH), spot("bottom", L, R, TH, B)]);
+    }
+
+    /**
+     * The gapped rectangle of a named spot on this window's output.
+     * @param {string} position
+     * @returns {WindowGeometry|null}
+     */
+    spotGeometry(position) {
+        const c = this.getSpotCandidates().find((cand) => cand.name === position);
+        if (!c) return null;
+        const r = c.gapped;
+        return new WindowGeometry({ x: r.left, y: r.top, width: r.right - r.left, height: r.bottom - r.top });
+    }
+
+    /**
+     * The name of the window's output (the screen number on Plasma 5).
+     * @returns {string|number|null}
+     */
+    getOutputName() {
+        const o = this.getOutput();
+        return o && typeof o === "object" && o.name !== undefined ? o.name : o;
+    }
+
+    /**
+     * Work out which tile spot the window is in, using the first rule that applies:
+     * 1. window.quickTileMode (Plasma 6.5-6.7);
+     * 2. maximizeMode 3 for maximize, or window.tile's rectangle matched against the flush spots
+     *    (Plasma 6.8; the tile's positionInLayout is a layout index, also used by custom tiles,
+     *    so it is not trusted);
+     * 3. the window's own geometry on a spot's gapped rectangle, or on the cascade grid inside it;
+     * 4. otherwise null (floating).
+     * @returns {{output: (string|number), position: string}|null}
+     */
+    computeSpot() {
+        const at = (position) => ({ output: this.getOutputName(), position });
+        const qtm = this.window.quickTileMode;
+        if (typeof qtm === "number" && TileableWindow.QUICK_TILE_NAMES[qtm]) return at(TileableWindow.QUICK_TILE_NAMES[qtm]);
+        if (this.window.maximizeMode === 3) return at("maximize");
+
+        const candidates = this.getSpotCandidates();
+        const tile = this.window.tile;
+        if (tile && tile.absoluteGeometry) {
+            const t = new WindowGeometry(tile.absoluteGeometry);
+            const tol = 4 + (tile.padding || 0);
+            const hit = candidates.find((c) =>
+                Math.abs(t.left - c.closed.left) <= tol && Math.abs(t.right - c.closed.right) <= tol &&
+                Math.abs(t.top - c.closed.top) <= tol && Math.abs(t.bottom - c.closed.bottom) <= tol);
+            return hit ? at(hit.name) : null;
+        }
+
+        // A window on a spot's gapped rectangle, or a cascade member offset inside it:
+        // same top-left and bottom-right shortfall on both axes, in whole cascade steps.
+        const g = this.geometry;
+        const step = TileableWindow.CASCADE_STEP;
+        const near = (v, w) => Math.abs(v - w) <= 2;
+        const onGrid = (v) => near(v, Math.round(v / step) * step);
+        let best = null;
+        candidates.forEach((c) => {
+            const dx = g.left - c.gapped.left, dy = g.top - c.gapped.top;
+            const dw = c.gapped.right - c.gapped.left - g.width, dh = c.gapped.bottom - c.gapped.top - g.height;
+            if (dx < -2 || dy < -2 || dw < -2 || !near(dx, dy) || !near(dw, dh) || dx > dw + 2) return;
+            if (!onGrid(dx) || !onGrid(dw)) return;
+            if (!best || dw < best.dw) best = { name: c.name, dw };
+        });
+        return best ? at(best.name) : null;
+    }
+
+    /**
+     * Recompute and store the window's spot. While the script itself is moving windows the
+     * stored spot is kept, since the geometry then is the script's, not KWin's.
+     * @returns {{output: (string|number), position: string}|null}
+     */
+    refreshSpot() {
+        if (coordinator.block || coordinator.cascadeLayout) return this.cascade.spot;
+        this.cascade.spot = this.computeSpot();
+        return this.cascade.spot;
+    }
+
+    /**
+     * Refresh the spot DROP_SETTLE_MS after a tile, output or maximize change, once KWin has
+     * finished; several signals for the same change share one refresh.
+     */
+    scheduleSpotRefresh() {
+        if (this._spotTimer) return;
+        const timer = new QTimer();
+        timer.interval = TileableWindow.DROP_SETTLE_MS;
+        timer.singleShot = true;
+        timer.timeout.connect(() => {
+            this._spotTimer = null;
+            this.onSpotSettled();
+        });
+        this._spotTimer = timer;
+        timer.start();
+    }
+
+    /**
+     * Runs once a tile, output or maximize change has settled.
+     */
+    onSpotSettled() {
+        if (!this.window || coordinator.mouseDragOrResizeInProgress) return;
+        this.refreshSpot();
+    }
+
+    /**
+     * Connects the signals that can change the window's spot.
+     */
+    setupSpotSignals() {
+        [this.window.tileChanged, this.window.quickTileModeChanged, this.window.outputChanged, this.window.maximizedChanged].forEach((signal) => {
+            if (signal) signal.connect(() => this.scheduleSpotRefresh());
+        });
     }
 
     /**
@@ -955,6 +1094,20 @@ TileableWindow._instances = new Map();
 TileableWindow.SNAP_DISTANCE = 24;
 /** How long (ms) to wait after a drag ends for KWin's own tile updates to land. */
 TileableWindow.DROP_SETTLE_MS = 50;
+/** The cascade offset (px) between one window's title bar and the next. */
+TileableWindow.CASCADE_STEP = 32;
+/** Plasma 6.5-6.7 quickTileMode flags (Left 1, Right 2, Top 4, Bottom 8) by spot. */
+TileableWindow.QUICK_TILE_NAMES = {
+    1: "left",
+    2: "right",
+    4: "top",
+    8: "bottom",
+    5: "topLeft",
+    6: "topRight",
+    9: "bottomLeft",
+    10: "bottomRight",
+    15: "maximize",
+};
 /** The KWin workspace slot that quick-tiles the active window into each spot. */
 TileableWindow.SNAP_SLOTS = {
     left: "slotWindowQuickTileLeft",
