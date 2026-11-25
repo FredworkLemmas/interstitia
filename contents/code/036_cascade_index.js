@@ -223,6 +223,8 @@ class CascadeIndex {
     constructor() {
         /** @type {Map<string, Map<string, CascadeGroup>>} */
         this.contexts = new Map();
+        /** @type {QTimer|null} The pending focus rotation, if any. */
+        this._focusTimer = null;
     }
 
     /**
@@ -356,9 +358,49 @@ class CascadeIndex {
         Array.from(tw.cascade.groups.values()).forEach((group) => this.remove(group, tw));
     }
 
+    /**
+     * workspace.windowActivated: when a background member of a group in the current context is
+     * focused, rotate the group to it after FOCUS_SETTLE_MS, unless a move has started by then or
+     * another window has been focused. A mouse press activates a window before KWin reports the
+     * drag, and a click cannot be told from Alt+Tab, so every activation waits the same.
+     * @param {KWin.Window} window
+     */
+    onWindowActivated(window) {
+        if (coordinator.cascadeLayout) return;
+        this._cancelFocus();
+        if (!window) return;
+        const tw = TileableWindow._instances.get(window.internalId);
+        const group = this.groupOf(tw);
+        if (!group || group.activeId() === window.internalId) return;
+        const timer = new QTimer();
+        timer.interval = CascadeIndex.FOCUS_SETTLE_MS;
+        timer.singleShot = true;
+        timer.timeout.connect(() => {
+            if (this._focusTimer !== timer) return;
+            this._focusTimer = null;
+            if (window.move || coordinator.mouseDragOrResizeInProgress) return;
+            if (workspace.activeWindow !== window) return;
+            const now = this.groupOf(tw);
+            if (now && now.activeId() !== window.internalId) {
+                debug("focus: rotating", now.key, "to", tw.getCaption());
+                now.activate(window.internalId);
+            }
+        });
+        this._focusTimer = timer;
+        timer.start();
+    }
+
+    /** Drop a pending focus rotation. */
+    _cancelFocus() {
+        if (!this._focusTimer) return;
+        if (typeof this._focusTimer.stop === "function") this._focusTimer.stop();
+        this._focusTimer = null;
+    }
+
     /** Forget every group (tests). */
     clear() {
         this.contexts.clear();
+        this._focusTimer = null;
     }
 
     /**
@@ -372,6 +414,9 @@ class CascadeIndex {
         if (tw.cascade.groups.get(group.ctx) === group) tw.cascade.groups.delete(group.ctx);
     }
 }
+
+/** How long (ms) a focused background member waits before its group rotates (Phase 0, F4). */
+CascadeIndex.FOCUS_SETTLE_MS = 400;
 
 if (typeof global !== "undefined") {
     global.CascadeIndex = CascadeIndex;

@@ -28,10 +28,8 @@ if (typeof registerShortcut === "undefined") {
     }
 }
 
-// event wiring ???
-workspace.windowActivated.connect((client) => {
-    if (!client) return;
-});
+// Focusing a background window of a cascade group rotates the group to it.
+workspace.windowActivated.connect((client) => coordinator.cascades.onWindowActivated(client));
 
 // init interstitia environment
 debug("initializing interstitia");
