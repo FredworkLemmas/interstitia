@@ -64,7 +64,7 @@ Interstitia can "cascade" windows that share a tile spot (a half, a quarter, the
 *   **Start Cascade (`Ctrl+}`):** Cascades the windows in the active window's spot. Pressing it again brings the top-left window to the front, so repeated presses walk round the whole group.
 *   **Stop Cascade (`Ctrl+{`):** Puts every window in the group back on the full spot, with the active window on top.
 
-A cascade group keeps its windows in a fixed order. The active window is always the one furthest down and to the right. Focusing another window in the group (clicking it, or Alt+Tab) rotates the group after a short pause: the windows that were below and to the right of it move round to the top-left, in order, and it takes the bottom-right place. If you press on a window's title bar and drag it, it leaves the group without moving first.
+A cascade group keeps its windows in a fixed order. The active window is always the one furthest down and to the right. Focusing another window in the group (clicking it, or Alt+Tab) rotates the group after a short pause: the windows that were below and to the right of it move round to the top-left, in order, and it takes the bottom-right place. If you press on a window's title bar and drag it, it leaves the group without moving first, and stays in front of the windows left behind.
 
 *   **Joining:** drop a window onto a group, or move it into the group's spot with `Meta`+arrow keys. It joins at the bottom-right.
 *   **Leaving:** drag a window out, move it to another spot with `Meta`+arrow keys, maximize it, or close it.

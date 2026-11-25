@@ -340,6 +340,28 @@ describe.each(K.APIS)("KWin $name API", (a) => {
             expect(index().groupOf(tw(ws[0])).members).toEqual(["A", "C"]);
         });
 
+        test.each([
+            ["the group goes on", ["A", "B", "C"]],
+            ["the group dissolves", ["A", "B"]],
+        ])("a dragged member stays in front and active (%s)", (_, ids) => {
+            const ws = windowsIn(ids);
+            workspace.windowList.mockImplementation(() => ws);
+            ws.forEach((w) => tw(w).initialize());
+            press(ws[ws.length - 1]);
+            workspace.raiseWindow = jest.fn();
+            try {
+                workspace.activeWindow = ws[0];
+                ws[0].move = true;
+                ws[0].interactiveMoveResizeStarted.emit();
+
+                const raised = workspace.raiseWindow.mock.calls.map((c) => c[0].internalId);
+                expect(raised[raised.length - 1]).toBe("A");
+                expect(workspace.activeWindow).toBe(ws[0]);
+            } finally {
+                delete workspace.raiseWindow;
+            }
+        });
+
         test("a member that is maximized leaves the group", () => {
             const ws = windowsIn(["A", "B", "C"]);
             workspace.windowList.mockImplementation(() => ws);

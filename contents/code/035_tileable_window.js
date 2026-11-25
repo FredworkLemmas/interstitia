@@ -605,6 +605,20 @@ class TileableWindow extends BaseWindow {
     }
 
     /**
+     * Raise this window and make it active, without the focus rotation reacting to it.
+     */
+    bringToFront() {
+        const wasLaying = coordinator.cascadeLayout;
+        coordinator.cascadeLayout = true;
+        try {
+            if (typeof workspace.raiseWindow === "function") workspace.raiseWindow(this.window);
+            if (workspace.activeWindow !== this.window) workspace.activeWindow = this.window;
+        } finally {
+            coordinator.cascadeLayout = wasLaying;
+        }
+    }
+
+    /**
      * Connects signals related to user-interactive moving and resizing.
      * Helps the WindowCoordinator track when to temporarily disable tiling adjustments.
      */
@@ -619,6 +633,8 @@ class TileableWindow extends BaseWindow {
             if (group) {
                 debug("drag start: leaving cascade group", group.key);
                 coordinator.cascades.remove(group, this);
+                // The group raised its remaining windows; the dragged one has the user's attention.
+                this.bringToFront();
             }
             debug("drag start: move", this._dragIsMove);
         });
