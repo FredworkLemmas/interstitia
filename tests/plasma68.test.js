@@ -230,14 +230,30 @@ describe.each(APIS)("KWin $name API", (a) => {
             expect(round(top.frameGeometry)).toEqual(once);
         });
 
-        (a.old ? test.skip : test)("a window not filling its tile keeps its edge", () => {
-            // The bottom edge is 200 px short of the split and near no anchor: not KWin's tile geometry, so not ours to move.
-            const top = makeWindow("mr75", { x: 0, y: 0, width: 960, height: 400 }, tiled(TOP));
-            workspace.windowList.mockReturnValue([top]);
+        (a.old ? test.skip : test)("a split 45 px off the half point gets the same answer from both sides (daneel, 17:26:41)", () => {
+            // Judged from the window edges, the left window's 915 snapped to the half anchor (944)
+            // while the right window's 915 did not (931): the windows overlapped.
+            const L = { x: 0, y: 0, width: 915, height: 1080 };
+            const R = { x: 915, y: 0, width: 1005, height: 1080 };
+            const l = makeWindow("l", L, tiled(L));
+            const r = makeWindow("r", R, tiled(R));
+            workspace.windowList.mockReturnValue([l, r]);
 
-            TileableWindow.get(top).applyGaps();
+            TileableWindow.get(l).applyGaps();
+            TileableWindow.get(r).applyGaps();
 
-            expect(round(top.frameGeometry)).toEqual({ x: 32, y: 32, width: 912, height: 368 });
+            expect(round(l.frameGeometry)).toEqual({ x: 32, y: 32, width: 867, height: 1016 });
+            expect(round(r.frameGeometry)).toEqual({ x: 931, y: 32, width: 957, height: 1016 });
+        });
+
+        (a.old ? test.skip : test)("a window KWin left off its tile is put back on its tile, gapped", () => {
+            // KWin shifted a window on another activity past the screen edge when the split moved.
+            const w = makeWindow("w", { x: 87, y: 0, width: 1100, height: 1080 }, tiled(TOP));
+            workspace.windowList.mockReturnValue([w]);
+
+            TileableWindow.get(w).applyGaps();
+
+            expect(round(w.frameGeometry)).toEqual({ x: 32, y: 32, width: 912, height: 552 });
         });
 
         (a.old ? test : test.skip)("without a tile object only the anchors apply", () => {

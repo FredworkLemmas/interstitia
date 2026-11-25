@@ -622,18 +622,38 @@ class TileableWindow extends BaseWindow {
      * @param {Object.<string, object>} clientGeometries - Map of window IDs to their draft geometries.
      */
     applyGapsArea(clientGeometries) {
-        let grid = this.getGridAnchors();
         let geo = clientGeometries[this.window.internalId];
-        if (!grid || !geo) return;
+        if (!geo) return;
+        // A window in a KWin tile (6.8) fills its tile, gapped; any other window has its own
+        // edges snapped to the anchors.
+        const t = this.tileRect();
+        if (t) {
+            Object.assign(geo, this.gapTileRect(t));
+        } else {
+            const grid = this.getGridAnchors();
+            if (!grid) return;
+            this.snapEdgesToAnchors(geo, grid);
+        }
 
+        // Reconstruct basic geometry from edges
+        geo.x = geo.left;
+        geo.y = geo.top;
+        geo.width = geo.right - geo.left;
+        geo.height = geo.bottom - geo.top;
+    }
+
+    /**
+     * Snap a rectangle's edges in place to the gapped anchors they are near.
+     * @param {object} geo - Edges left/right/top/bottom; edited in place.
+     * @param {object} grid - From getGridAnchors().
+     */
+    snapEdgesToAnchors(geo, grid) {
         // Snap each edge that is "near" a standard anchor (a screen edge, or a quarter or half
         // point) to the gapped version of that anchor. A later anchor in a list wins over an earlier one.
-        const snapped = {};
         const snap = (edge, anchors) => {
             anchors.forEach(([anchor, gapSize]) => {
                 if (WindowGeometry.nearArea(geo[edge], anchor.closed, anchor.gapped, gapSize)) {
                     geo[edge] = anchor.gapped;
-                    snapped[edge] = true;
                 }
             });
         };
@@ -661,45 +681,58 @@ class TileableWindow extends BaseWindow {
             [grid.bottom.halfVertical, gap.mid],
             [grid.bottom.quarterTop, gap.mid],
         ]);
-
-        // An edge on a tile split away from every anchor (KWin keeps a split where the user
-        // last dragged it) gets half the middle gap from the split instead.
-        this.applyTileSplitGaps(geo, snapped);
-
-        // Reconstruct basic geometry from edges
-        geo.x = geo.left;
-        geo.y = geo.top;
-        geo.width = geo.right - geo.left;
-        geo.height = geo.bottom - geo.top;
     }
 
     /**
-     * Gap the edges of a tiled window that lie on a split between tiles but near no anchor.
-     * For a split at `s`, the edge before it goes to round(s - mid / 2) and the edge after it
-     * to that plus mid, so the two windows sharing the split end up exactly `gap.mid` apart.
-     * Edges on the work area's edge, edges already snapped to an anchor, and edges far from
-     * their tile's (a window not filling its tile) are left alone.
-     * Needs window.tile.absoluteGeometry, so a pre-6.8 quick tile known only by quickTileMode
-     * gets anchor gaps only.
-     * @param {object} geo - The draft geometry, with left/right/top/bottom; edited in place.
-     * @param {{left?: boolean, right?: boolean, top?: boolean, bottom?: boolean}} snapped
+     * The flush rectangle of the KWin tile the window is in (Plasma 6.8), or null.
+     * @returns {WindowGeometry|null}
      */
-    applyTileSplitGaps(geo, snapped) {
-        const tile = this.window.tile;
-        if (!tile || !tile.absoluteGeometry) return;
-        const t = new WindowGeometry(tile.absoluteGeometry);
-        const a = new WindowGeometry(this.getWorkArea());
-        const slack = TileableWindow.SPLIT_EDGE_SLACK;
-        const reach = gap.mid + (tile.padding || 0) + slack;
-        const before = (split) => Math.round(split - gap.mid / 2);
-        const interior = (edge, areaEdge) => Math.abs(edge - areaEdge) > slack;
-        const near = (edge, split) => Math.abs(edge - split) <= reach;
-
-        if (!snapped.left && interior(t.left, a.left) && near(geo.left, t.left)) geo.left = before(t.left) + gap.mid;
-        if (!snapped.right && interior(t.right, a.right) && near(geo.right, t.right)) geo.right = before(t.right);
-        if (!snapped.top && interior(t.top, a.top) && near(geo.top, t.top)) geo.top = before(t.top) + gap.mid;
-        if (!snapped.bottom && interior(t.bottom, a.bottom) && near(geo.bottom, t.bottom)) geo.bottom = before(t.bottom);
+    tileRect() {
+        const tile = this.window && this.window.tile;
+        return tile && tile.absoluteGeometry ? new WindowGeometry(tile.absoluteGeometry) : null;
     }
+
+    /**
+     * How far (px) a tile edge may be from another and still count as the same edge.
+     * @returns {number}
+     */
+    tileTolerance() {
+        const tile = this.window && this.window.tile;
+        return 4 + ((tile && tile.padding) || 0);
+    }
+
+    /**
+     * The gapped rectangle of a KWin tile. Each edge is decided from the tile alone, so two
+     * tiles sharing a split always agree about it:
+     * - on the work area's edge: that edge's outer gap;
+     * - on a split within gap.mid + 2 px of a quarter or half point: that anchor's gapped
+     *   position (the same anchors a window's own edges snap to);
+     * - on any other split `s`: the edge before it at round(s - mid / 2), the edge after it
+     *   at that plus mid, so the windows either side are exactly `gap.mid` apart.
+     * @param {WindowGeometry} t - The tile's flush rectangle.
+     * @returns {{left: number, right: number, top: number, bottom: number}}
+     */
+    gapTileRect(t) {
+        const grid = this.getGridAnchors();
+        const a = new WindowGeometry(this.getWorkArea());
+        const slack = this.tileTolerance();
+        const reach = gap.mid + 2;
+        const before = (split) => Math.round(split - gap.mid / 2);
+        const after = (split) => before(split) + gap.mid;
+        const side = (edge, areaEdge, outer, inner, onSplit) => {
+            if (Math.abs(edge - areaEdge) <= slack) return outer.gapped;
+            const anchor = inner.find((an) => Math.abs(edge - an.closed) <= reach);
+            return anchor ? anchor.gapped : onSplit(edge);
+        };
+        const L = grid.left, R = grid.right, T = grid.top, B = grid.bottom;
+        return {
+            left: side(t.left, a.left, L.fullLeft, [L.quarterLeft, L.halfHorizontal, L.quarterRight], after),
+            right: side(t.right, a.right, R.fullRight, [R.quarterLeft, R.halfHorizontal, R.quarterRight], before),
+            top: side(t.top, a.top, T.fullTop, [T.quarterTop, T.halfVertical, T.quarterBottom], after),
+            bottom: side(t.bottom, a.bottom, B.fullBottom, [B.quarterTop, B.halfVertical, B.quarterBottom], before),
+        };
+    }
+
 
     /**
      * Called after applyGaps when a tile/quick-tile change occurs (updateCascade=true).
@@ -958,8 +991,6 @@ TileableWindow._instances = new Map();
 TileableWindow.SNAP_DISTANCE = 24;
 /** How long (ms) to wait after a drag ends for KWin's own tile updates to land. */
 TileableWindow.DROP_SETTLE_MS = 50;
-/** How far (px) a tile edge may be from the work area's edge and still count as on it. */
-TileableWindow.SPLIT_EDGE_SLACK = 2;
 /** The KWin workspace slot that quick-tiles the active window into each spot. */
 TileableWindow.SNAP_SLOTS = {
     left: "slotWindowQuickTileLeft",

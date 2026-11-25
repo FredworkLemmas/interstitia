@@ -72,7 +72,7 @@ The `contents/code/` directory contains numbered source modules that `invoke dev
 3. For each anchor, there are two snapping positions: "closed" (no gap) and "open" (with gap)
 4. If any window edge is near an anchor (within tolerance), snap it to the "open" version
 5. The gap between windows tiled side by side comes from the half/quarter anchors, which include `gapMid`; neighbouring windows are never resized
-6. An edge on a KWin tile split near no anchor (KWin keeps a split where the user last dragged it) is gapped from the split itself, `gapMid / 2` each side (`applyTileSplitGaps()`, needs `window.tile.absoluteGeometry`)
+6. A window in a KWin 6.8 tile (`window.tile.absoluteGeometry`) is gapped from its tile, not its own edges (`gapTileRect()`): screen edges get the outer gaps, a split within `gapMid + 2` of a quarter/half point gets that anchor, any other split `gapMid / 2` each side. Each split is judged from the tile alone, so the tiles either side always agree
 7. Only tiled and maximized windows are gapped; floating windows are only ever changed by the drop snap
 
 ### Signal / State Management
