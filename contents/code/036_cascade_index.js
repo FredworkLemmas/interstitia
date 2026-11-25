@@ -105,12 +105,85 @@ class CascadeGroup {
     }
 
     /**
-     * The gapped rectangle of the group's spot, worked out from a member's output.
+     * The gapped rectangle the group fills. It follows the members' KWin tile, wherever its
+     * split is: the first member whose tile is in the group's spot gives it. If no member
+     * reports a tile now, the last tile slot is kept while the work area is unchanged; otherwise
+     * it is the spot's standard rectangle on a member's output.
      * @returns {WindowGeometry|null}
      */
     slotGeometry() {
-        const tw = this.windows()[0];
-        return tw ? tw.spotGeometry(this.position) : null;
+        const members = this.windows();
+        if (members.length === 0) return null;
+        const area = new WindowGeometry(members[0].getWorkArea());
+        for (const tw of members) {
+            const slot = tw.tileSlotGeometry(this.position);
+            if (slot) {
+                this._tileSlot = { area, slot };
+                return slot;
+            }
+        }
+        if (this._tileSlot && this._tileSlot.area.equals(area)) return this._tileSlot.slot;
+        return members[0].spotGeometry(this.position);
+    }
+
+    /**
+     * The flush rectangle of the KWin tile the group's members are in, or null if none reports
+     * one in the group's spot.
+     * @param {TileableWindow} [except] - A window not to ask (one about to join).
+     * @returns {WindowGeometry|null}
+     */
+    tileRect(except) {
+        for (const tw of this.windows()) {
+            if (tw === except) continue;
+            const t = tw.tileRect();
+            if (t && tw.tileSpotName(t) === this.position) return t;
+        }
+        return null;
+    }
+
+    /**
+     * Where the member at step k (0 = top-left) of n goes in a slot.
+     * @returns {{x: number, y: number, width: number, height: number}}
+     */
+    static geometryAt(slot, k, n) {
+        const step = CascadeGroup.STEP;
+        return {
+            x: slot.x + k * step,
+            y: slot.y + k * step,
+            width: slot.width - (n - 1) * step,
+            height: slot.height - (n - 1) * step,
+        };
+    }
+
+    /**
+     * A member's geometry changed and the script did not do it: KWin moved it, typically
+     * because the user dragged its tile's split. Lay the group out again when the slot has
+     * moved, or once when the member is off its place; a window that refuses its place
+     * (say a minimum size) cannot make the group lay out over and over.
+     * @param {TileableWindow} tw
+     */
+    onMemberMoved(tw) {
+        if (!this.isCurrent()) return;
+        const slot = this.slotGeometry();
+        if (!slot) return;
+        const slotMoved = !this._laidSlot || !this._laidSlot.nearlyEquals(slot, 1);
+        if (!slotMoved && (this._nudged || this.isInPlace(tw))) return;
+        debug("CascadeGroup: member moved by KWin, laying out", this.key, slotMoved ? "(slot moved)" : "");
+        this.layout();
+        this._nudged = !slotMoved;
+    }
+
+    /**
+     * True when a member is where the last layout put it, within 2 px.
+     * @param {TileableWindow} tw
+     * @returns {boolean}
+     */
+    isInPlace(tw) {
+        if (!this._laidSlot) return false;
+        const windows = this.ordered();
+        const k = windows.indexOf(tw);
+        if (k < 0) return true;
+        return tw.geometry.nearlyEquals(CascadeGroup.geometryAt(this._laidSlot, k, windows.length), 2);
     }
 
     /**
@@ -143,15 +216,11 @@ class CascadeGroup {
         const slot = this.slotGeometry();
         const windows = this.ordered();
         if (!slot || windows.length === 0) return;
-        const step = CascadeGroup.STEP;
         const n = windows.length;
         debug("CascadeGroup.layout:", n, "windows in", this.key);
-        this._place(windows, (k) => ({
-            x: slot.x + k * step,
-            y: slot.y + k * step,
-            width: slot.width - (n - 1) * step,
-            height: slot.height - (n - 1) * step,
-        }));
+        this._laidSlot = slot;
+        this._nudged = false;
+        this._place(windows, (k) => CascadeGroup.geometryAt(slot, k, n));
     }
 
     /**

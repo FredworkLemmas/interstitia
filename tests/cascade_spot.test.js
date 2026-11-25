@@ -99,8 +99,16 @@ describe.each(K.APIS)("KWin $name API", (a) => {
 describe("KWin 6.8 custom tiles", () => {
     beforeAll(() => K.useApi(K.APIS[0]));
 
-    test("a 25 % custom-layout column is not mistaken for a half", () => {
+    test("a 25 % custom-layout column is the left spot, and its slot is the column, not the half", () => {
         const r = { x: 0, y: 0, width: 480, height: 1080 };
+        const w = K.makeWindow("w", r, { tile: { absoluteGeometry: K.rect(r), padding: 4 } });
+        expect(TileableWindow.get(w).refreshSpot()).toEqual({ output: "DP-1", position: "left" });
+        // The quarter anchor gaps the column's right edge: 1920 - 3 * (1920 + 32) / 4 = 456.
+        expect(K.round(TileableWindow.get(w).slotFor("left"))).toEqual({ x: 32, y: 32, width: 424, height: 1016 });
+    });
+
+    test("a tile in the middle column, touching only the top and bottom, is no spot", () => {
+        const r = { x: 480, y: 0, width: 960, height: 1080 };
         const w = K.makeWindow("w", r, { tile: { absoluteGeometry: K.rect(r), padding: 4 } });
         expect(TileableWindow.get(w).refreshSpot()).toBeNull();
     });

@@ -509,7 +509,13 @@ class TileableWindow extends BaseWindow {
                 coordinator.cascades.remove(group, this);
                 leftByMaximize = true;
             } else {
-                fulldebug("applyGaps: skipping cascade member", this.getCaption());
+                // A member is laid out by its group. If KWin moved it (its tile's split was
+                // dragged), the group lays itself out again, after the drag if one is going on.
+                if (coordinator.mouseDragOrResizeInProgress) {
+                    coordinator.skippedDuringDrag.set(this.window.internalId, this);
+                } else {
+                    group.onMemberMoved(this);
+                }
                 return;
             }
         }
@@ -562,9 +568,24 @@ class TileableWindow extends BaseWindow {
      * @param {Object.<string, object>} clientGeometries - Map of window IDs to their draft geometries.
      */
     applyGapsArea(clientGeometries) {
-        let grid = this.getGridAnchors();
-        let geo = clientGeometries[this.window.internalId];
-        if (!grid || !geo) return;
+        const geo = clientGeometries[this.window.internalId];
+        if (!geo || !this.gapEdges(geo)) return;
+
+        // Reconstruct basic geometry from edges
+        geo.x = geo.left;
+        geo.y = geo.top;
+        geo.width = geo.right - geo.left;
+        geo.height = geo.bottom - geo.top;
+    }
+
+    /**
+     * Gap a rectangle's edges in place: anchor snapping, then tile splits.
+     * @param {object} geo - Edges left/right/top/bottom; edited in place.
+     * @returns {boolean} False when there is no grid to gap against.
+     */
+    gapEdges(geo) {
+        const grid = this.getGridAnchors();
+        if (!grid) return false;
 
         // Snap each edge that is "near" a standard anchor (a screen edge, or a quarter or half
         // point) to the gapped version of that anchor. A later anchor in a list wins over an earlier one.
@@ -605,12 +626,7 @@ class TileableWindow extends BaseWindow {
         // An edge on a tile split away from every anchor (KWin keeps a split where the user
         // last dragged it) gets half the middle gap from the split instead.
         this.applyTileSplitGaps(geo, snapped);
-
-        // Reconstruct basic geometry from edges
-        geo.x = geo.left;
-        geo.y = geo.top;
-        geo.width = geo.right - geo.left;
-        geo.height = geo.bottom - geo.top;
+        return true;
     }
 
     /**
@@ -738,6 +754,7 @@ class TileableWindow extends BaseWindow {
         const ctx = index.contextOf(this);
         const spot = this.refreshSpot();
         let group = spot ? index.groupAt(ctx, spot.output, spot.position) : null;
+        if (group && !this.fitsGroup(group)) group = null;
         if (!group) {
             const g = this.geometry;
             const cx = g.x + g.width / 2, cy = g.y + g.height / 2;
@@ -815,12 +832,80 @@ class TileableWindow extends BaseWindow {
     }
 
     /**
+     * The flush rectangle of the KWin tile the window is in (Plasma 6.8), or null.
+     * @returns {WindowGeometry|null}
+     */
+    tileRect() {
+        const tile = this.window && this.window.tile;
+        return tile && tile.absoluteGeometry ? new WindowGeometry(tile.absoluteGeometry) : null;
+    }
+
+    /**
+     * How far (px) a tile edge may be from another and still count as the same edge.
+     * @returns {number}
+     */
+    tileTolerance() {
+        const tile = this.window && this.window.tile;
+        return 4 + ((tile && tile.padding) || 0);
+    }
+
+    /**
+     * Name a tile by the work area edges it touches: left, top and bottom is "left", left and
+     * top is "topLeft", and so on, wherever its splits are. A tile touching no edge, only two
+     * opposite ones, or all four is no spot.
+     * @param {WindowGeometry} t - The tile's flush rectangle.
+     * @returns {string|null}
+     */
+    tileSpotName(t) {
+        const a = new WindowGeometry(this.getWorkArea());
+        const tol = this.tileTolerance();
+        const on = (v, w) => Math.abs(v - w) <= tol;
+        const sides = (on(t.left, a.left) ? "L" : "") + (on(t.right, a.right) ? "R" : "") + (on(t.top, a.top) ? "T" : "") + (on(t.bottom, a.bottom) ? "B" : "");
+        return TileableWindow.TILE_SIDES_SPOT[sides] || null;
+    }
+
+    /**
+     * The gapped rectangle of the window's own tile, if that tile is in `position`: the slot a
+     * cascade group uses, so it follows the tile's split wherever KWin has it.
+     * @param {string} position
+     * @returns {WindowGeometry|null}
+     */
+    tileSlotGeometry(position) {
+        const t = this.tileRect();
+        if (!t || this.tileSpotName(t) !== position) return null;
+        const geo = { left: t.left, right: t.right, top: t.top, bottom: t.bottom };
+        if (!this.gapEdges(geo)) return null;
+        return new WindowGeometry({ x: geo.left, y: geo.top, width: geo.right - geo.left, height: geo.bottom - geo.top });
+    }
+
+    /**
+     * The gapped rectangle the window fills in `position`: its own tile's, else the spot's.
+     * @param {string} position
+     * @returns {WindowGeometry|null}
+     */
+    slotFor(position) {
+        return this.tileSlotGeometry(position) || this.spotGeometry(position);
+    }
+
+    /**
+     * False when the window and a group both report tiles, and they are different tiles with
+     * the same spot name (say a custom-layout column and the left quick tile).
+     * @param {CascadeGroup} group
+     * @returns {boolean}
+     */
+    fitsGroup(group) {
+        const mine = this.tileRect();
+        const theirs = group.tileRect(this);
+        return !mine || !theirs || mine.nearlyEquals(theirs, this.tileTolerance());
+    }
+
+    /**
      * Put the window on the full gapped rectangle of a spot, e.g. when it shows on an activity
      * where it is in no cascade group. Writes only if the geometry changes.
      * @param {string} position
      */
     restoreToSpot(position) {
-        const geo = this.spotGeometry(position);
+        const geo = this.slotFor(position);
         if (!geo || this.geometry.nearlyEquals(geo, 0)) return;
         const wasBlocked = coordinator.block;
         coordinator.block = true;
@@ -843,10 +928,12 @@ class TileableWindow extends BaseWindow {
     /**
      * Work out which tile spot the window is in, using the first rule that applies:
      * 1. window.quickTileMode (Plasma 6.5-6.7);
-     * 2. maximizeMode 3 for maximize, or window.tile's rectangle matched against the flush spots
-     *    (Plasma 6.8; the tile's positionInLayout is a layout index, also used by custom tiles,
-     *    so it is not trusted);
-     * 3. the window's own geometry on a spot's gapped rectangle, or on the cascade grid inside it;
+     * 2. maximizeMode 3 for maximize, or window.tile's rectangle matched against the flush spots,
+     *    else named by the work area edges it touches, so a split KWin keeps off-centre still
+     *    gives a spot (Plasma 6.8; the tile's positionInLayout is a layout index, also used by
+     *    custom tiles, so it is not trusted);
+     * 3. the window's own geometry on a spot's gapped rectangle, or on the cascade grid inside it,
+     *    including its cascade group's slot wherever the group's tile split is;
      * 4. otherwise null (floating).
      * @returns {{output: (string|number), position: string}|null}
      */
@@ -864,11 +951,19 @@ class TileableWindow extends BaseWindow {
             const hit = candidates.find((c) =>
                 Math.abs(t.left - c.closed.left) <= tol && Math.abs(t.right - c.closed.right) <= tol &&
                 Math.abs(t.top - c.closed.top) <= tol && Math.abs(t.bottom - c.closed.bottom) <= tol);
-            return hit ? at(hit.name) : null;
+            if (hit) return at(hit.name);
+            const name = this.tileSpotName(t);
+            return name ? at(name) : null;
         }
 
         // A window on a spot's gapped rectangle, or a cascade member offset inside it:
         // same top-left and bottom-right shortfall on both axes, in whole cascade steps.
+        // The window's own group's slot comes first, since it follows the group's tile split.
+        const group = this.getCascadeGroup();
+        const slot = group && group.output === this.getOutputName() ? group.slotGeometry() : null;
+        if (slot) {
+            candidates.unshift({ name: group.position, gapped: { left: slot.left, right: slot.right, top: slot.top, bottom: slot.bottom } });
+        }
         const g = this.geometry;
         const step = TileableWindow.CASCADE_STEP;
         const near = (v, w) => Math.abs(v - w) <= 2;
@@ -928,7 +1023,8 @@ class TileableWindow extends BaseWindow {
         }
         // Moved (e.g. with Meta+arrows) into a spot with a group: join it, bottom-right.
         // A maximized window never joins: maximizing takes a window out of its group.
-        const target = spot && spot.position !== "maximize" && this.isOnCurrentContext() ? index.groupAt(index.contextOf(this), spot.output, spot.position) : null;
+        let target = spot && spot.position !== "maximize" && this.isOnCurrentContext() ? index.groupAt(index.contextOf(this), spot.output, spot.position) : null;
+        if (target && !this.fitsGroup(target)) target = null;
         if (target) {
             debug("spot changed: joining cascade group", target.key, this.getCaption());
             index.add(target, this);
@@ -1027,6 +1123,17 @@ TileableWindow.DROP_SETTLE_MS = 50;
 TileableWindow.SPLIT_EDGE_SLACK = 2;
 /** The cascade offset (px) between one window's title bar and the next. */
 TileableWindow.CASCADE_STEP = 32;
+/** Spot names by the work area sides a tile touches (Left, Right, Top, Bottom). */
+TileableWindow.TILE_SIDES_SPOT = {
+    LTB: "left",
+    RTB: "right",
+    LRT: "top",
+    LRB: "bottom",
+    LT: "topLeft",
+    RT: "topRight",
+    LB: "bottomLeft",
+    RB: "bottomRight",
+};
 /** Plasma 6.5-6.7 quickTileMode flags (Left 1, Right 2, Top 4, Bottom 8) by spot. */
 TileableWindow.QUICK_TILE_NAMES = {
     1: "left",
@@ -1092,7 +1199,11 @@ class ActiveWindow extends TileableWindow {
             if (!tw || window.minimized || tw.shouldIgnore() || !tw.isOnCurrentContext() || tw.isInCascade()) return;
             if (tw.getOutputName() !== spot.output) return;
             const s = tw.refreshSpot();
-            if (s && s.position === spot.position) same.push(tw);
+            if (!s || s.position !== spot.position) return;
+            // Different tiles with the same name (a custom column and a quick tile) never mix.
+            const mine = this.tileRect(), theirs = tw.tileRect();
+            if (mine && theirs && !mine.nearlyEquals(theirs, this.tileTolerance())) return;
+            same.push(tw);
         });
         // The ring starts in stacking order, bottom to top, when KWin reports it.
         const stack = Array.isArray(workspace.stackingOrder) ? workspace.stackingOrder : null;
@@ -1128,7 +1239,7 @@ class ActiveWindow extends TileableWindow {
         }
         const ctx = index.contextOf(this);
         const existing = index.groupAt(ctx, spot.output, spot.position);
-        if (existing) {
+        if (existing && this.fitsGroup(existing)) {
             index.add(existing, this);
             return;
         }

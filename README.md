@@ -59,7 +59,7 @@ Resizing a window never snaps it.
 
 ### Cascading Windows
 
-Interstitia can "cascade" windows that share a tile spot (a half, a quarter, the top or bottom half, or maximized), offsetting each by 32 pixels so you can see every title bar in the stack.
+Interstitia can "cascade" windows that share a tile spot (a half, a quarter, the top or bottom half, or maximized), offsetting each by 32 pixels so you can see every title bar in the stack. The cascade fills the windows' actual tile, so it follows KWin's split wherever you have dragged it, and moves with it when you drag it again.
 
 *   **Start Cascade (`Ctrl+}`):** Cascades the windows in the active window's spot. Pressing it again brings the top-left window to the front, so repeated presses walk round the whole group.
 *   **Stop Cascade (`Ctrl+{`):** Puts every window in the group back on the full spot, with the active window on top.
