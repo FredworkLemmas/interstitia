@@ -5,7 +5,8 @@
 const K = require("./helpers/kwin");
 
 K.installKWin();
-K.load(["contents/code/034_geometry.js", "contents/code/035_tileable_window.js", "contents/code/036_cascade_index.js"]);
+K.load(["contents/code/034_geometry.js", "contents/code/035_tileable_window.js", "contents/code/036_cascade_index.js", "contents/code/070_reaction.js"]);
+onRelayouted();
 
 const LEFT = { x: 32, y: 32, width: 912, height: 1016 };
 const RIGHT = { x: 976, y: 32, width: 912, height: 1016 };
@@ -55,5 +56,22 @@ describe.each(K.APIS)("KWin $name API", (a) => {
         ActiveWindow.getActive().startCascade();
 
         expect(workspace.windowList).not.toHaveBeenCalled();
+    });
+
+    test("an activity switch writes only windows on the new activity", () => {
+        const flush = { x: 0, y: 0, width: 960, height: 1080 };
+        // The crowd as flush quick tiles, which a pass over every window would gap.
+        const ws = [];
+        for (let i = 0; i < 40; i++) {
+            ws.push(K.makeWindow(`w${i}`, flush, { activities: [ACTS[i % 3]], output: K.OUTPUTS[i % 2], ...K.tiled(flush) }));
+        }
+        workspace.windowList.mockImplementation(() => ws);
+        resetWrites(ws);
+
+        K.switchActivity("act-B");
+
+        const written = writes(ws);
+        expect(written.length).toBeGreaterThan(0);
+        written.forEach((id) => expect(ws.find((w) => w.internalId === id).activities).toEqual(["act-B"]));
     });
 });

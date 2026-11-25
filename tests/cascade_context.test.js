@@ -5,7 +5,9 @@
 const K = require("./helpers/kwin");
 
 K.installKWin();
-K.load(["contents/code/034_geometry.js", "contents/code/035_tileable_window.js", "contents/code/036_cascade_index.js"]);
+K.load(["contents/code/034_geometry.js", "contents/code/035_tileable_window.js", "contents/code/036_cascade_index.js", "contents/code/070_reaction.js"]);
+// Wire the workspace switch signals once, as the main loop does.
+onRelayouted();
 
 const LEFT = { x: 32, y: 32, width: 912, height: 1016 };
 
@@ -191,6 +193,85 @@ describe.each(K.APIS)("KWin $name API", (a) => {
             workspace.activeWindow = x;
 
             expect(ids(sameSlot())).toEqual(["x", "y"]);
+        });
+    });
+
+    describe("switching activity or desktop lays out that context's groups", () => {
+        const RIGHT = { x: 976, y: 32, width: 912, height: 1016 };
+        const step = (k, n, slot = LEFT) => ({ x: slot.x + 32 * k, y: slot.y + 32 * k, width: slot.width - 32 * (n - 1), height: slot.height - 32 * (n - 1) });
+
+        test("a window in a group on A and alone on B is full-slot on B and cascaded again back on A", () => {
+            const shared = K.makeWindow("shared", LEFT, { activities: ["act-A", "act-B"] });
+            const a1 = K.makeWindow("a1", LEFT);
+            cascade(shared, [shared, a1]);
+            expect(K.round(shared.frameGeometry)).toEqual(step(1, 2));
+
+            K.switchActivity("act-B");
+            expect(K.round(shared.frameGeometry)).toEqual(LEFT);
+
+            K.switchActivity("act-A");
+            expect(K.round(shared.frameGeometry)).toEqual(step(1, 2));
+            expect(K.round(a1.frameGeometry)).toEqual(step(0, 2));
+        });
+
+        test("a window in a different group on each activity takes each group's layout in turn", () => {
+            const shared = K.makeWindow("shared", LEFT, { activities: ["act-A", "act-B"] });
+            const a1 = K.makeWindow("a1", LEFT);
+            const b1 = K.makeWindow("b1", LEFT, { activities: ["act-B"] });
+            const b2 = K.makeWindow("b2", LEFT, { activities: ["act-B"] });
+            const all = [shared, a1, b1, b2];
+            cascade(a1, all);
+            K.switchActivity("act-B");
+            cascade(b1, all);
+            const gB = coordinator.cascades.groupOf(TileableWindow.get(shared));
+            expect(gB.ring.length).toBe(3);
+
+            K.switchActivity("act-A");
+            expect(K.round(shared.frameGeometry)).toEqual(step(0, 2));
+            K.switchActivity("act-B");
+            expect(gB.members.indexOf("shared")).toBeGreaterThanOrEqual(0);
+            expect(K.round(shared.frameGeometry)).toEqual(step(gB.members.indexOf("shared"), 3));
+        });
+
+        test("the same holds across virtual desktops", () => {
+            const shared = K.makeWindow("shared", LEFT, { desktops: [], onAllDesktops: true });
+            const a1 = K.makeWindow("a1", LEFT);
+            cascade(shared, [shared, a1]);
+
+            K.switchDesktop(K.DESKTOPS[1]);
+            expect(K.round(shared.frameGeometry)).toEqual(LEFT);
+            K.switchDesktop(K.DESKTOPS[0]);
+            expect(K.round(shared.frameGeometry)).toEqual(step(1, 2));
+        });
+
+        test("a switch writes only windows on the new activity", () => {
+            const flush = { x: 0, y: 0, width: 960, height: 1080 };
+            // Flush quick tiles on A and C would get gaps from a pass over every window.
+            const onA = [0, 1, 2].map((i) => K.makeWindow(`a${i}`, flush, K.tiled(flush)));
+            const onC = [0, 1, 2, 3].map((i) => K.makeWindow(`c${i}`, flush, { activities: ["act-C"], ...K.tiled(flush) }));
+            const onB = [0, 1, 2].map((i) => K.makeWindow(`b${i}`, LEFT, { activities: ["act-B"] }));
+            const all = onA.concat(onC, onB);
+            K.switchActivity("act-B");
+            cascade(onB[0], all);
+            all.forEach((w) => (w.geometryWrites = 0));
+            onB.forEach((w) => (w.frameGeometry = LEFT));
+            onB.forEach((w) => (w.geometryWrites = 0));
+
+            K.switchActivity("act-B");
+
+            expect(all.filter((w) => w.geometryWrites > 0).map((w) => w.internalId).sort()).toEqual(["b0", "b1", "b2"]);
+        });
+
+        test("the gap pass on a switch leaves flush tiles on other activities alone", () => {
+            const flush = { x: 0, y: 0, width: 960, height: 1080 };
+            const other = K.makeWindow("other", flush, { activities: ["act-B"], ...K.tiled(flush) });
+            const here = K.makeWindow("here", flush, K.tiled(flush));
+            workspace.windowList.mockImplementation(() => [other, here]);
+
+            K.switchActivity("act-A");
+
+            expect(K.round(here.frameGeometry)).toEqual(LEFT);
+            expect(other.geometryWrites).toBe(0);
         });
     });
 });

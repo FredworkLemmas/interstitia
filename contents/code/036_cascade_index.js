@@ -359,6 +359,29 @@ class CascadeIndex {
     }
 
     /**
+     * After an activity, desktop or screen change: lay out every group of the current context,
+     * and put each window showing here that is in a group elsewhere, but in none here, back on
+     * its full slot. Touches only those windows.
+     */
+    layoutContext() {
+        const ctx = this.contextOf();
+        this.groupsIn(ctx).forEach((group) => group.layout());
+        const seen = new Set();
+        this.contexts.forEach((spots, other) => {
+            if (other === ctx) return;
+            spots.forEach((group) => {
+                group.windows().forEach((tw) => {
+                    const id = tw.window.internalId;
+                    if (seen.has(id)) return;
+                    seen.add(id);
+                    if (tw.cascade.groups.has(ctx) || !tw.isOnCurrentContext()) return;
+                    tw.restoreToSpot(group.position);
+                });
+            });
+        });
+    }
+
+    /**
      * workspace.windowActivated: when a background member of a group in the current context is
      * focused, rotate the group to it after FOCUS_SETTLE_MS, unless a move has started by then or
      * another window has been focused. A mouse press activates a window before KWin reports the

@@ -36,16 +36,17 @@ class WindowCoordinator {
     }
 
     /**
-     * Apply gaps to all existing windows.
+     * Apply gaps to every window on the current activity and desktop.
      */
     applyGapsAll() {
         if (typeof console !== "undefined") {
             console.log("interstitia: applyGapsAll triggered");
         }
+        // Only windows showing now: the others get theirs when their activity or desktop shows.
         const allWindows = workspace.windowList ? workspace.windowList() : workspace.clientList();
         allWindows.forEach((client) => {
             const tw = TileableWindow.get(client);
-            if (tw) tw.applyGaps();
+            if (tw && tw.isOnCurrentContext()) tw.applyGaps();
         });
     }
 }
@@ -739,6 +740,23 @@ class TileableWindow extends BaseWindow {
         if (!c) return null;
         const r = c.gapped;
         return new WindowGeometry({ x: r.left, y: r.top, width: r.right - r.left, height: r.bottom - r.top });
+    }
+
+    /**
+     * Put the window on the full gapped rectangle of a spot, e.g. when it shows on an activity
+     * where it is in no cascade group. Writes only if the geometry changes.
+     * @param {string} position
+     */
+    restoreToSpot(position) {
+        const geo = this.spotGeometry(position);
+        if (!geo || this.geometry.nearlyEquals(geo, 0)) return;
+        const wasBlocked = coordinator.block;
+        coordinator.block = true;
+        try {
+            this.window.frameGeometry = { x: geo.x, y: geo.y, width: geo.width, height: geo.height };
+        } finally {
+            coordinator.block = wasBlocked;
+        }
     }
 
     /**
