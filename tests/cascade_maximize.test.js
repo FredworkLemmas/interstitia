@@ -101,4 +101,27 @@ describe.each(K.APIS)("KWin $name API", (a) => {
         expect(index().groupOf(tw(ws[0]))).toBeNull();
         expect(group.ring.length).toBe(2);
     });
+
+    test("Meta+Right on a member gaps it in the right half", () => {
+        // KWin unmaximizes and quick-tiles it flush in one go. The geometry change reaches
+        // the group first, so the group's settle timer fires before the spot refresh, and
+        // takes the window out of the group before the spot refresh sees it.
+        const ws = maximized(["a", "b", "c"]);
+        press(ws[2]);
+        const group = index().groupOf(tw(ws[0]));
+        const right = { x: 960, y: 0, width: 960, height: 1080 };
+
+        ws[2].maximizeMode = 0;
+        Object.assign(ws[2], a.old ? { quickTileMode: 2 } : { tile: { absoluteGeometry: K.rect(right), padding: 0 } });
+        ws[2].frameGeometry = right;
+        ws[2].frameGeometryChanged.emit();
+        ws[2].maximizedChanged.emit();
+        ws[2].tileChanged.emit();
+        ws[2].quickTileModeChanged.emit();
+        K.flushTimers();
+
+        expect(index().groupOf(tw(ws[2]))).toBeNull();
+        expect(group.ring.length).toBe(2);
+        expect(K.round(ws[2].frameGeometry)).toEqual({ x: 976, y: 32, width: 912, height: 1016 });
+    });
 });

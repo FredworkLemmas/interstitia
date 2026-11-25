@@ -1016,7 +1016,9 @@ class TileableWindow extends BaseWindow {
         if (target) {
             debug("spot changed: joining cascade group", target.key, this.getCaption());
             index.add(target, this);
-        } else if (group) {
+        } else {
+            // Gap it in its new spot even when it had no group here: the group's own settle
+            // (a restore from a maximize group) can take it out first, skipping its gaps.
             this.applyGaps();
         }
     }
