@@ -129,3 +129,28 @@ test("windows in a 25 % custom column and in the left quick tile never share a g
     ActiveWindow.getActive().startCascade();
     expect(index().groupOf(tw(h))).toBeNull();
 });
+
+test("resizing a cascaded window keeps it in its group, and the group fills the resized tile", () => {
+    const { ws, r, group } = cascadeLeft();
+    const front = group.ordered()[2].window;
+    front.resize = true;
+    front.interactiveMoveResizeStarted.emit();
+    expect(index().groupOf(tw(front))).toBe(group);
+    moveSplit(ws, r);
+    front.resize = false;
+    front.interactiveMoveResizeFinished.emit();
+    K.flushTimers();
+
+    expect(ws.every((w) => index().groupOf(tw(w)) === group)).toBe(true);
+    group.ordered().forEach((m, k) => expect(K.round(m.window.frameGeometry)).toEqual(stepGeo(LEFT_SLOT_2, k, 3)));
+    // The window on the other side of the split is gapped from the same split.
+    expect(K.round(r.frameGeometry)).toEqual({ x: 1016, y: 32, width: 872, height: 1016 });
+});
+
+test("moving a cascaded window still takes it out of its group", () => {
+    const { group } = cascadeLeft();
+    const front = group.ordered()[2].window;
+    front.move = true;
+    front.interactiveMoveResizeStarted.emit();
+    expect(index().groupOf(tw(front))).toBeNull();
+});

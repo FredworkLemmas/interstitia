@@ -67,7 +67,7 @@ Interstitia can "cascade" windows that share a tile spot (a half, a quarter, the
 A cascade group keeps its windows in a fixed order. The active window is always the one furthest down and to the right. Focusing another window in the group (clicking it, or Alt+Tab) rotates the group after a short pause: the windows that were below and to the right of it move round to the top-left, in order, and it takes the bottom-right place. If you press on a window's title bar and drag it, it leaves the group without moving first, and stays in front of the windows left behind.
 
 *   **Joining:** drop a window onto a group, or move it into the group's spot with `Meta`+arrow keys. It joins at the bottom-right.
-*   **Leaving:** drag a window out, move it to another spot with `Meta`+arrow keys, maximize it, or close it.
+*   **Leaving:** drag a window out (resizing a window in a group keeps it there; the group follows the resized tile), move it to another spot with `Meta`+arrow keys, maximize it, or close it.
 
 Cascade groups belong to one activity and one virtual desktop. Groups in the same spot on different activities or desktops never affect each other, and a window that is on several activities can be in a different group on each. Switching activity or desktop lays out that activity's and desktop's groups.
 
