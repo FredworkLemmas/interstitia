@@ -845,11 +845,22 @@ class TileableWindow extends BaseWindow {
      */
     onSpotSettled() {
         if (!this.window || coordinator.mouseDragOrResizeInProgress) return;
+        const index = coordinator.cascades;
         const group = this.getCascadeGroup();
         const spot = this.refreshSpot();
-        if (group && (!spot || spot.output !== group.output || spot.position !== group.position)) {
+        const inSpot = (g) => spot && spot.output === g.output && spot.position === g.position;
+        if (group && inSpot(group)) return;
+        if (group) {
             debug("spot changed: leaving cascade group", group.key, this.getCaption());
-            coordinator.cascades.remove(group, this);
+            index.remove(group, this);
+        }
+        // Moved (e.g. with Meta+arrows) into a spot with a group: join it, bottom-right.
+        // A maximized window never joins: maximizing takes a window out of its group.
+        const target = spot && spot.position !== "maximize" && this.isOnCurrentContext() ? index.groupAt(index.contextOf(this), spot.output, spot.position) : null;
+        if (target) {
+            debug("spot changed: joining cascade group", target.key, this.getCaption());
+            index.add(target, this);
+        } else if (group) {
             this.applyGaps();
         }
     }

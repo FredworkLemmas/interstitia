@@ -154,4 +154,55 @@ describe.each(K.APIS)("KWin $name API", (a) => {
             expect(g.members).toEqual(["D", "B", "C"]);
         });
     });
+
+    describe("Meta+arrows", () => {
+        const RIGHT = { x: 976, y: 32, width: 912, height: 1016 };
+        const FLUSH = { left: { x: 0, y: 0, width: 960, height: 1080, flags: 1 }, right: { x: 960, y: 0, width: 960, height: 1080, flags: 2 } };
+        /** KWin quick-tiling `w` into `name`, as this API shape reports it, then the settle. */
+        const quickTile = (w, name) => {
+            const f = FLUSH[name];
+            Object.assign(w, a.old ? { quickTileMode: f.flags } : { tile: { absoluteGeometry: K.rect(f), padding: 0 } });
+            w.frameGeometry = f;
+            w.tileChanged.emit();
+            w.quickTileModeChanged.emit();
+            K.flushTimers();
+        };
+
+        test("a window moved into a spot with a group joins it, bottom-right", () => {
+            const { ws, g } = ringOf(["A", "B", "C"]);
+            ws.forEach((w) => tw(w).initialize());
+            const x = K.makeWindow("X", { x: 1200, y: 300, width: 500, height: 400 });
+            tw(x).initialize();
+
+            quickTile(x, "left");
+
+            expect(index().groupOf(tw(x))).toBe(g);
+            expect(g.activeId()).toBe("X");
+            expect(onScreen(ws.concat([x]))).toEqual(["A", "B", "C", "X"]);
+        });
+
+        test("a member moved into another group's spot leaves its group and joins that one", () => {
+            const { ws, byId, g } = ringOf(["A", "B", "C"]);
+            ws.forEach((w) => tw(w).initialize());
+            const r = ["R1", "R2"].map((id) => K.makeWindow(id, RIGHT));
+            r.forEach((w) => tw(w).initialize());
+            const gr = index().create(CTX, "DP-1", "right", ["R1", "R2"], "R2");
+
+            quickTile(byId("B"), "right");
+
+            expect(g.ring).toEqual(["A", "C"]);
+            expect(gr.ring).toEqual(["R1", "R2", "B"]);
+            expect(gr.activeId()).toBe("B");
+        });
+
+        test("a window moved into a spot with no group stays on its own", () => {
+            ringOf(["A", "B"]).ws.forEach((w) => tw(w).initialize());
+            const x = K.makeWindow("X", { x: 300, y: 300, width: 500, height: 400 });
+            tw(x).initialize();
+
+            quickTile(x, "right");
+
+            expect(index().groupOf(tw(x))).toBeNull();
+        });
+    });
 });
