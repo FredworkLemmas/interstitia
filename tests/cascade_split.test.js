@@ -79,6 +79,7 @@ test("a member keeps its spot from the group's slot when KWin no longer reports 
 test("when KWin moves the split, the group lays itself out in the new slot", () => {
     const { ws, r, group } = cascadeLeft();
     moveSplit(ws, r);
+    K.flushTimers();
     group.ordered().forEach((m, k) => expect(K.round(m.window.frameGeometry)).toEqual(stepGeo(LEFT_SLOT_2, k, 3)));
 });
 
@@ -103,9 +104,10 @@ test("a member that will not take its place makes the group lay out once, not ov
         ws[0].frameGeometry = { x: 200, y: 200, width: 600, height: 600 };
         ws[0].frameGeometryChanged.emit();
     };
-    stubborn();
-    stubborn();
-    stubborn();
+    for (let i = 0; i < 3; i++) {
+        stubborn();
+        K.flushTimers();
+    }
     expect(layout).toHaveBeenCalledTimes(1);
 });
 

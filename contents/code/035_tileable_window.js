@@ -139,15 +139,18 @@ class BaseWindow {
 
     /**
      * Determines if the window should be ignored by the script.
+     * @param {boolean} [forCascade=false] - Asking for a cascade group: a maximized window
+     *     counts even when includeMaximized (gaps on maximized windows) is off.
      * @returns {boolean}
      */
-    shouldIgnore() {
+    shouldIgnore(forCascade = false) {
         return (
             !this.window ||
             !this.window.normalWindow ||
             !this.window.resizeable ||
             this.window.fullScreen ||
-            (!config.includeMaximized && this.isMaximized()) ||
+            // includeMaximized is about gaps; maximized windows can always cascade.
+            (!forCascade && !config.includeMaximized && this.isMaximized()) ||
             (config.excludeMode && config.applications.includes(String(this.window.resourceClass))) ||
             (config.includeMode && !config.applications.includes(String(this.window.resourceClass)))
         );
@@ -504,7 +507,9 @@ class TileableWindow extends BaseWindow {
         const group = this.getCascadeGroup();
         let leftByMaximize = false;
         if (group) {
-            if (this.window.maximizeMode === 3 || this.isMaximized()) {
+            // Maximizing takes a window out of a half or quarter group; a group in the
+            // maximize spot is made of maximized windows.
+            if (group.position !== "maximize" && (this.window.maximizeMode === 3 || this.isMaximized())) {
                 debug("applyGaps: cascade member maximized, leaving", group.key);
                 coordinator.cascades.remove(group, this);
                 leftByMaximize = true;
@@ -532,7 +537,7 @@ class TileableWindow extends BaseWindow {
             return;
         }
 
-        // Floating windows keep their borders; they only ever get placed by snapToTile() on drop.
+        // Floating windows keep their borders and their place.
         if (!this.isTiledOrMaximized()) {
             fulldebug("applyGaps: floating, leaving borders alone", this.getCaption());
             return;
@@ -734,19 +739,15 @@ class TileableWindow extends BaseWindow {
     }
 
     /**
-     * Runs shortly after a drag or resize ends. Tiled or maximized windows get their gaps.
-     * A floating window that was moved snaps into a nearby quick-tile spot if there is one;
-     * otherwise nothing changes.
+     * Runs shortly after a drag or resize ends. A moved window dropped on a cascade group
+     * joins it; otherwise a tiled or maximized window gets its gaps, and a floating window
+     * stays exactly where it was dropped (KWin's own edge and corner tiling does the rest).
      * @param {boolean} wasMove - Whether the interaction was a move rather than a resize.
      */
     afterDrop(wasMove) {
         if (!this.window || this.shouldIgnore()) return;
         if (wasMove && this.joinGroupAfterDrop()) return;
-        if (this.isTiledOrMaximized()) {
-            this.applyGaps();
-            return;
-        }
-        if (wasMove) this.snapToTile();
+        if (this.isTiledOrMaximized()) this.applyGaps();
     }
 
     /**
@@ -778,43 +779,16 @@ class TileableWindow extends BaseWindow {
         return true;
     }
 
-    /**
-     * The quick-tile spots on this window's output, as candidates for WindowGeometry.pickSnapTarget.
-     * @returns {Array<{name: string, sides: string[], closed: object, gapped: object}>}
-     */
-    getSnapCandidates() {
-        const g = this.getGridAnchors();
-        const L = g.left.fullLeft, LH = g.left.halfHorizontal;
-        const R = g.right.fullRight, RH = g.right.halfHorizontal;
-        const T = g.top.fullTop, TH = g.top.halfVertical;
-        const B = g.bottom.fullBottom, BH = g.bottom.halfVertical;
-        const spot = (name, sides, left, right, top, bottom) => ({
-            name,
-            sides,
-            closed: { left: left.closed, right: right.closed, top: top.closed, bottom: bottom.closed },
-            gapped: { left: left.gapped, right: right.gapped, top: top.gapped, bottom: bottom.gapped },
-        });
-        return [
-            spot("left", ["left", "top", "bottom"], L, RH, T, B),
-            spot("right", ["right", "top", "bottom"], LH, R, T, B),
-            spot("topLeft", ["left", "top"], L, RH, T, BH),
-            spot("topRight", ["right", "top"], LH, R, T, BH),
-            spot("bottomLeft", ["left", "bottom"], L, RH, TH, B),
-            spot("bottomRight", ["right", "bottom"], LH, R, TH, B),
-            spot("maximize", ["left", "right", "top", "bottom"], L, R, T, B),
-        ];
-    }
-
     // --- Tile spot ---
 
     /**
-     * The spots a cascade group can occupy: the quick-tile snap candidates plus the top and
-     * bottom halves (which KWin can quick-tile, but a drop never snaps into).
-     * @returns {Array<{name: string, sides: string[], closed: object, gapped: object}>}
+     * The spots a cascade group can occupy: the halves, the quarters and the whole work area.
+     * @returns {Array<{name: string, closed: object, gapped: object}>}
      */
     getSpotCandidates() {
         const g = this.getGridAnchors();
-        const L = g.left.fullLeft, R = g.right.fullRight;
+        const L = g.left.fullLeft, LH = g.left.halfHorizontal;
+        const R = g.right.fullRight, RH = g.right.halfHorizontal;
         const T = g.top.fullTop, TH = g.top.halfVertical;
         const B = g.bottom.fullBottom, BH = g.bottom.halfVertical;
         const spot = (name, left, right, top, bottom) => ({
@@ -822,7 +796,17 @@ class TileableWindow extends BaseWindow {
             closed: { left: left.closed, right: right.closed, top: top.closed, bottom: bottom.closed },
             gapped: { left: left.gapped, right: right.gapped, top: top.gapped, bottom: bottom.gapped },
         });
-        return this.getSnapCandidates().concat([spot("top", L, R, T, BH), spot("bottom", L, R, TH, B)]);
+        return [
+            spot("left", L, RH, T, B),
+            spot("right", LH, R, T, B),
+            spot("topLeft", L, RH, T, BH),
+            spot("topRight", LH, R, T, BH),
+            spot("bottomLeft", L, RH, TH, B),
+            spot("bottomRight", LH, R, TH, B),
+            spot("maximize", L, R, T, B),
+            spot("top", L, R, T, BH),
+            spot("bottom", L, R, TH, B),
+        ];
     }
 
     /**
@@ -1026,9 +1010,8 @@ class TileableWindow extends BaseWindow {
             debug("spot changed: leaving cascade group", group.key, this.getCaption());
             index.remove(group, this);
         }
-        // Moved (e.g. with Meta+arrows) into a spot with a group: join it, bottom-right.
-        // A maximized window never joins: maximizing takes a window out of its group.
-        let target = spot && spot.position !== "maximize" && this.isOnCurrentContext() ? index.groupAt(index.contextOf(this), spot.output, spot.position) : null;
+        // Moved (e.g. with Meta+arrows, or maximized) into a spot with a group: join it, bottom-right.
+        let target = spot && this.isOnCurrentContext() ? index.groupAt(index.contextOf(this), spot.output, spot.position) : null;
         if (target && !this.fitsGroup(target)) target = null;
         if (target) {
             debug("spot changed: joining cascade group", target.key, this.getCaption());
@@ -1045,29 +1028,6 @@ class TileableWindow extends BaseWindow {
         [this.window.tileChanged, this.window.quickTileModeChanged, this.window.outputChanged, this.window.maximizedChanged].forEach((signal) => {
             if (signal) signal.connect(() => this.scheduleSpotRefresh());
         });
-    }
-
-    /**
-     * If this floating window lines up with a quick-tile spot, or sits against a screen edge,
-     * make it a real KWin quick tile there (the same as Meta+arrows). Otherwise leave it alone.
-     * @returns {string|null} The spot it was tiled into.
-     */
-    snapToTile() {
-        const area = new WindowGeometry(this.getWorkArea());
-        const target = WindowGeometry.pickSnapTarget(this.geometry, area, this.getSnapCandidates(), TileableWindow.SNAP_DISTANCE);
-        if (!target) {
-            debug("drop: no tile spot nearby, leaving", this.getCaption(), "where it is");
-            return null;
-        }
-        const slot = TileableWindow.SNAP_SLOTS[target];
-        if (typeof workspace[slot] !== "function") {
-            debug("drop: KWin has no", slot, "- not snapping", this.getCaption());
-            return null;
-        }
-        debug("drop: snapping", this.getCaption(), "into", target);
-        workspace.activeWindow = this.window;
-        workspace[slot]();
-        return target;
     }
 
     /**
@@ -1120,8 +1080,6 @@ if (typeof global !== "undefined") {
 /** @type {Map<string, TileableWindow>} Cache of instances indexed by window internalId. */
 TileableWindow._instances = new Map();
 
-/** How close (px) a dropped window's edges must be to a tile spot or screen edge to snap. */
-TileableWindow.SNAP_DISTANCE = 24;
 /** How long (ms) to wait after a drag ends for KWin's own tile updates to land. */
 TileableWindow.DROP_SETTLE_MS = 50;
 /** The cascade offset (px) between one window's title bar and the next. */
@@ -1148,16 +1106,6 @@ TileableWindow.QUICK_TILE_NAMES = {
     9: "bottomLeft",
     10: "bottomRight",
     15: "maximize",
-};
-/** The KWin workspace slot that quick-tiles the active window into each spot. */
-TileableWindow.SNAP_SLOTS = {
-    left: "slotWindowQuickTileLeft",
-    right: "slotWindowQuickTileRight",
-    topLeft: "slotWindowQuickTileTopLeft",
-    topRight: "slotWindowQuickTileTopRight",
-    bottomLeft: "slotWindowQuickTileBottomLeft",
-    bottomRight: "slotWindowQuickTileBottomRight",
-    maximize: "slotWindowMaximize",
 };
 
 /**
@@ -1199,7 +1147,7 @@ class ActiveWindow extends TileableWindow {
         const same = [];
         allWindows.forEach((window) => {
             const tw = window.internalId === this.window.internalId ? this : TileableWindow.get(window);
-            if (!tw || window.minimized || tw.shouldIgnore() || !tw.isOnCurrentContext() || tw.isInCascade()) return;
+            if (!tw || window.minimized || tw.shouldIgnore(true) || !tw.isOnCurrentContext() || tw.isInCascade()) return;
             if (tw.getOutputName() !== spot.output) return;
             const s = tw.refreshSpot();
             if (!s || s.position !== spot.position) return;

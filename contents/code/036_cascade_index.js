@@ -157,17 +157,54 @@ class CascadeGroup {
 
     /**
      * A member's geometry changed and the script did not do it: KWin moved it, typically
-     * because the user dragged its tile's split. Lay the group out again when the slot has
-     * moved, or once when the member is off its place; a window that refuses its place
-     * (say a minimum size) cannot make the group lay out over and over.
+     * because the user dragged its tile's split, or restored it from maximized. The group
+     * waits DROP_SETTLE_MS for KWin to finish (several members moved at once share the wait),
+     * then settleMoved() decides.
      * @param {TileableWindow} tw
      */
     onMemberMoved(tw) {
         if (!this.isCurrent()) return;
+        if (!this._moved) this._moved = new Set();
+        this._moved.add(tw);
+        if (this._settleTimer) return;
+        const timer = new QTimer();
+        timer.interval = TileableWindow.DROP_SETTLE_MS;
+        timer.singleShot = true;
+        timer.timeout.connect(() => {
+            this._settleTimer = null;
+            const moved = Array.from(this._moved);
+            this._moved.clear();
+            this.settleMoved(moved);
+        });
+        this._settleTimer = timer;
+        timer.start();
+    }
+
+    /**
+     * Once KWin has settled after moving members: in a maximize group, a member no longer
+     * maximized and off its place was restored, and leaves. Otherwise lay the group out again
+     * when the slot has moved, or once when a member is off its place; a window that refuses
+     * its place (say a minimum size) cannot make the group lay out over and over.
+     * @param {TileableWindow[]} moved
+     */
+    settleMoved(moved) {
+        if (!this.isCurrent() || coordinator.mouseDragOrResizeInProgress) return;
+        const members = moved.filter((tw) => tw.window && this.has(tw.window.internalId));
+        if (members.length === 0) return;
+        if (this.position === "maximize") {
+            const restored = members.filter((tw) => typeof tw.window.maximizeMode === "number" && tw.window.maximizeMode !== 3 && !this.isInPlace(tw));
+            if (restored.length) {
+                restored.forEach((tw) => {
+                    debug("CascadeGroup: member restored from maximized, leaving", this.key, tw.getCaption());
+                    coordinator.cascades.remove(this, tw);
+                });
+                return;
+            }
+        }
         const slot = this.slotGeometry();
         if (!slot) return;
         const slotMoved = !this._laidSlot || !this._laidSlot.nearlyEquals(slot, 1);
-        if (!slotMoved && (this._nudged || this.isInPlace(tw))) return;
+        if (!slotMoved && (this._nudged || members.every((tw) => this.isInPlace(tw)))) return;
         debug("CascadeGroup: member moved by KWin, laying out", this.key, slotMoved ? "(slot moved)" : "");
         this.layout();
         this._nudged = !slotMoved;

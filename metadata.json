@@ -15,8 +15,8 @@
                 "Name": "Fred McDavid"
             }
         ],
-        "Description": "Adds space around tiled and maximized windows, and snaps dropped windows into nearby quick-tile spots. Supports Plasma 6.5 to 6.8.",
-        "Description[de]": "Fügt Abstände um gekachelte und maximierte Fenster hinzu und rastet abgelegte Fenster in nahe Schnellkachel-Positionen ein. Unterstützt Plasma 6.5 bis 6.8.",
+        "Description": "Adds space around tiled and maximized windows, and cascades windows that share a tile spot. Supports Plasma 6.5 to 6.8.",
+        "Description[de]": "Fügt Abstände um gekachelte und maximierte Fenster hinzu und staffelt Fenster, die sich eine Kachelposition teilen. Unterstützt Plasma 6.5 bis 6.8.",
         "EnabledByDefault": true,
         "Icon": "preferences-system-windows",
         "Id": "interstitia",
