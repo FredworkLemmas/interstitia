@@ -250,7 +250,8 @@ class TileableWindow extends BaseWindow {
          * groups: the cascade group the window is in for each context (activity and desktop).
          * @type {{spot: ({output: string, position: string}|null), groups: Map<string, CascadeGroup>}}
          */
-        this.cascade = { spot: null, groups: new Map() };
+        // restoreTo: the group a maximize took the window out of, to rejoin on restore.
+        this.cascade = { spot: null, groups: new Map(), restoreTo: null };
     }
 
     // --- Activity and desktop context ---
@@ -505,14 +506,13 @@ class TileableWindow extends BaseWindow {
         // Cascade cleanup must run before shouldIgnore(): a maximized window with
         // includeMaximized=false would return early and stay in its cascade group.
         const group = this.getCascadeGroup();
-        let leftByMaximize = false;
         if (group) {
             // Maximizing takes a window out of a half or quarter group; a group in the
-            // maximize spot is made of maximized windows.
+            // maximize spot is made of maximized windows. KWin can give the window its
+            // maximized geometry before it reports maximizeMode 3, so check both.
             if (group.position !== "maximize" && (this.window.maximizeMode === 3 || this.isMaximized())) {
                 debug("applyGaps: cascade member maximized, leaving", group.key);
-                coordinator.cascades.remove(group, this);
-                leftByMaximize = true;
+                this.leaveForMaximize(group);
             } else {
                 // A member is laid out by its group. If KWin moved it (its tile's split was
                 // dragged), the group lays itself out again, after the drag if one is going on.
@@ -525,11 +525,7 @@ class TileableWindow extends BaseWindow {
             }
         }
 
-        if (this.shouldIgnore()) {
-            // Raise the maximized window above the members its group just laid out.
-            if (leftByMaximize) workspace.activeWindow = this.window;
-            return;
-        }
+        if (this.shouldIgnore()) return;
 
         if (coordinator.mouseDragOrResizeInProgress) {
             debug("applyGaps: skipping, drag/resize in progress", this.getCaption());
@@ -563,7 +559,6 @@ class TileableWindow extends BaseWindow {
             coordinator.block = false;
         }
 
-        if (leftByMaximize) workspace.activeWindow = this.window;
         debug("");
     }
 
@@ -682,6 +677,66 @@ class TileableWindow extends BaseWindow {
     }
 
     /**
+     * Take a window that was just maximized out of its half or quarter group, remembering the
+     * group so a restore can bring it back (rejoinAfterRestore()). The group lays itself out
+     * again, raising its remaining windows, so the maximized window is raised back in front;
+     * this runs straight away, since KWin may still report the window as not maximized.
+     * @param {CascadeGroup} group
+     */
+    leaveForMaximize(group) {
+        const id = this.window.internalId;
+        this.cascade.restoreTo = {
+            ctx: group.ctx,
+            output: group.output,
+            position: group.position,
+            peers: group.ring.filter((m) => m !== id),
+        };
+        coordinator.cascades.remove(group, this);
+        this.bringToFront();
+    }
+
+    /**
+     * When a window that a maximize took out of a group is restored, put it back in that group,
+     * in front. KWin restores it to the last geometry it chose for the window itself, with no
+     * tile: its old floating place, or a cascade place the script once gave it in some other
+     * group, which can look like another spot. So only a KWin tile in another spot (Meta+arrows
+     * while maximized) keeps it out; so does a restore on another activity or desktop.
+     * A group that dissolved when the window left is formed again from the windows still in its
+     * spot.
+     * @param {{output: (string|number), position: string}|null} spot - the window's new spot
+     * @returns {boolean} true when the window rejoined
+     */
+    rejoinAfterRestore(spot) {
+        const memo = this.cascade.restoreTo;
+        if (!memo) return false;
+        // Still maximized: wait for the restore.
+        if (this.window.maximizeMode === 3 || (spot && spot.position === "maximize")) return false;
+        this.cascade.restoreTo = null;
+        const qtm = this.window.quickTileMode;
+        const kwinTiled = Boolean(this.tileRect()) || (typeof qtm === "number" && qtm !== 0);
+        if (kwinTiled && spot && (spot.output !== memo.output || spot.position !== memo.position)) return false;
+        const index = coordinator.cascades;
+        if (index.contextOf(this) !== memo.ctx || !this.isOnCurrentContext()) return false;
+        const id = this.window.internalId;
+        const group = index.groupAt(memo.ctx, memo.output, memo.position);
+        if (group) {
+            debug("restored: rejoining cascade group", group.key, this.getCaption());
+            index.add(group, this);
+            return true;
+        }
+        const peers = memo.peers.filter((pid) => {
+            const p = TileableWindow._instances.get(pid);
+            if (!p || !p.window || p.window.minimized || index.groupOf(p, memo.ctx)) return false;
+            const s = p.refreshSpot();
+            return Boolean(s) && s.output === memo.output && s.position === memo.position;
+        });
+        if (peers.length === 0) return false;
+        debug("restored: re-forming cascade group", memo.output, memo.position, this.getCaption());
+        index.create(memo.ctx, memo.output, memo.position, [...peers, id], id);
+        return true;
+    }
+
+    /**
      * Raise this window and make it active, without the focus rotation reacting to it.
      */
     bringToFront() {
@@ -695,6 +750,7 @@ class TileableWindow extends BaseWindow {
         }
     }
 
+
     /**
      * Connects signals related to user-interactive moving and resizing.
      * Helps the WindowCoordinator track when to temporarily disable tiling adjustments.
@@ -706,6 +762,8 @@ class TileableWindow extends BaseWindow {
             coordinator.skippedDuringDrag.clear();
             // Only a move can snap into a tile on drop; a resize never does.
             this._dragIsMove = Boolean(this.window.move);
+            // A window dragged after a maximize (KWin restores it as it goes) lands where it is dropped.
+            if (this._dragIsMove) this.cascade.restoreTo = null;
             // Moving a window takes it out of its cascade group. A resize does not: it moves the
             // tile's split, and the group lays itself out in the new tile when it ends.
             const group = this._dragIsMove ? this.getCascadeGroup() : null;
@@ -723,6 +781,9 @@ class TileableWindow extends BaseWindow {
             coordinator.mouseDragOrResizeInProgress = false;
             const wasMove = this._dragIsMove;
             this._dragIsMove = false;
+            // Where the pointer let go: what the user aimed the drop at.
+            const c = workspace.cursorPos;
+            const pointer = c && typeof c.x === "number" && typeof c.y === "number" ? { x: c.x, y: c.y } : null;
 
             // KWin 6.8 can update a window's tile just after Finished (drag-to-edge tiling),
             // so decide what to do once it has settled.
@@ -730,7 +791,7 @@ class TileableWindow extends BaseWindow {
             timer.interval = TileableWindow.DROP_SETTLE_MS;
             timer.singleShot = true;
             timer.timeout.connect(() => {
-                this.afterDrop(wasMove);
+                this.afterDrop(wasMove, pointer);
                 // KWin resizes a tiled window's neighbours along with it; gap them too.
                 coordinator.regapSkippedDuringDrag(this);
             });
@@ -743,20 +804,25 @@ class TileableWindow extends BaseWindow {
      * joins it; otherwise a tiled or maximized window gets its gaps, and a floating window
      * stays exactly where it was dropped (KWin's own edge and corner tiling does the rest).
      * @param {boolean} wasMove - Whether the interaction was a move rather than a resize.
+     * @param {{x: number, y: number}|null} [pointer] - Where the pointer was let go.
      */
-    afterDrop(wasMove) {
+    afterDrop(wasMove, pointer = null) {
         if (!this.window || this.shouldIgnore()) return;
-        if (wasMove && this.joinGroupAfterDrop()) return;
+        if (wasMove && this.joinGroupAfterDrop(pointer)) return;
         if (this.isTiledOrMaximized()) this.applyGaps();
     }
 
     /**
      * After a move, join the cascade group the window was dropped on, if any: the group in the
-     * window's spot, or else a group on the same output whose slot's middle half holds the
-     * window's centre. Only groups of the current activity and desktop are looked at.
+     * window's spot, or else a group on the same output whose slot's middle half holds the point
+     * the pointer was let go at. A window is dragged by its title bar, far from its centre, so
+     * the pointer is what the user aims; the window's centre is used only when KWin reports no
+     * pointer position. Failing that, the pointer let go on a member's title bar joins its group.
+     * Only groups of the current activity and desktop are looked at.
+     * @param {{x: number, y: number}|null} [pointer]
      * @returns {boolean} True if the window joined a group.
      */
-    joinGroupAfterDrop() {
+    joinGroupAfterDrop(pointer = null) {
         const index = coordinator.cascades;
         const ctx = index.contextOf(this);
         const spot = this.refreshSpot();
@@ -764,7 +830,7 @@ class TileableWindow extends BaseWindow {
         if (group && !this.fitsGroup(group)) group = null;
         if (!group) {
             const g = this.geometry;
-            const cx = g.x + g.width / 2, cy = g.y + g.height / 2;
+            const cx = pointer ? pointer.x : g.x + g.width / 2, cy = pointer ? pointer.y : g.y + g.height / 2;
             const output = this.getOutputName();
             group = index.groupsIn(ctx).find((candidate) => {
                 if (candidate.output !== output) return false;
@@ -773,10 +839,34 @@ class TileableWindow extends BaseWindow {
                     cy >= slot.y + slot.height / 4 && cy <= slot.y + (3 * slot.height) / 4;
             }) || null;
         }
-        if (!group) return false;
+        if (!group && pointer) group = this.groupByTitleBarAt(ctx, pointer);
+        if (!group) {
+            debug("drop: no cascade group here", this.getCaption(), "spot", JSON.stringify(spot), "pointer", JSON.stringify(pointer), "geo", this.geometry.toString());
+            return false;
+        }
         debug("drop: joining cascade group", group.key);
         index.add(group, this);
         return true;
+    }
+
+    /**
+     * The group, on this window's output, one of whose members' title bars is under `pointer`:
+     * the top TITLE_BAR_HEIGHT px of the member, across its width. The rear members' title bars
+     * are the strips the cascade leaves showing.
+     * @param {string} ctx
+     * @param {{x: number, y: number}} pointer
+     * @returns {CascadeGroup|null}
+     */
+    groupByTitleBarAt(ctx, pointer) {
+        const output = this.getOutputName();
+        const onTitleBar = (tw) => {
+            if (tw === this || !tw.window) return false;
+            const g = tw.geometry;
+            return pointer.x >= g.left && pointer.x <= g.right && pointer.y >= g.top && pointer.y <= g.top + TileableWindow.TITLE_BAR_HEIGHT;
+        };
+        const group = coordinator.cascades.groupsIn(ctx).find((g) => g.output === output && g.windows().some(onTitleBar)) || null;
+        if (group) debug("drop: on a title bar in cascade group", group.key);
+        return group;
     }
 
     // --- Tile spot ---
@@ -1009,10 +1099,16 @@ class TileableWindow extends BaseWindow {
         // The group raises its own windows as it lays out again; the active window that left it
         // (Meta+arrows) goes back in front. Others (say, moved off an unplugged screen) stay put.
         const wasActive = Boolean(group) && workspace.activeWindow === this.window;
-        if (group) {
+        if (group && spot && spot.position === "maximize" && group.position !== "maximize") {
+            // Maximized, reported before its geometry changed: remembered for the restore, raised.
+            debug("spot changed: maximized, leaving cascade group", group.key, this.getCaption());
+            this.leaveForMaximize(group);
+        } else if (group) {
             debug("spot changed: leaving cascade group", group.key, this.getCaption());
             index.remove(group, this);
         }
+        // Restored after a maximize took it out of a group: back into that group, in front.
+        if (this.rejoinAfterRestore(spot)) return;
         // Moved (e.g. with Meta+arrows, or maximized) into a spot with a group: join it, bottom-right.
         let target = spot && this.isOnCurrentContext() ? index.groupAt(index.contextOf(this), spot.output, spot.position) : null;
         if (target && !this.fitsGroup(target)) target = null;
@@ -1090,6 +1186,8 @@ TileableWindow._instances = new Map();
 TileableWindow.DROP_SETTLE_MS = 50;
 /** The cascade offset (px) between one window's title bar and the next. */
 TileableWindow.CASCADE_STEP = 32;
+/** How far (px) below a window's top a drop counts as on its title bar (or Firefox's tab bar). */
+TileableWindow.TITLE_BAR_HEIGHT = 40;
 /** Spot names by the work area sides a tile touches (Left, Right, Top, Bottom). */
 TileableWindow.TILE_SIDES_SPOT = {
     LTB: "left",
