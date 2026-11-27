@@ -135,6 +135,19 @@ describe.each(K.APIS)("KWin $name API", (a) => {
             expect(workspace.activeWindow).toBe(ws[0]);
         });
 
+        test("restored, with no tile, to a cascade place from some other group, it still rejoins", () => {
+            const ws = groupOf(["A", "B", "C"]);
+            maximize(ws[0]);
+
+            // KWin's restore geometry: where the script once laid it out in a group on the right.
+            restore(ws[0], { x: RIGHT.x + 32, y: RIGHT.y + 32, width: RIGHT.width - 64, height: RIGHT.height - 64 });
+
+            const group = index().groupOf(tw(ws[1]));
+            expect(index().groupOf(tw(ws[0]))).toBe(group);
+            expect(group.activeId()).toBe("A");
+            expect(group.position).toBe("left");
+        });
+
         test("restored into another spot, it stays there", () => {
             const ws = groupOf(["A", "B", "C"]);
             maximize(ws[0]);

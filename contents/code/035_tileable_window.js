@@ -698,8 +698,10 @@ class TileableWindow extends BaseWindow {
 
     /**
      * When a window that a maximize took out of a group is restored, put it back in that group,
-     * in front. KWin restores it to its old floating geometry (no tile), or to the group's spot;
-     * restored anywhere else, or on another activity or desktop, it stays where KWin put it.
+     * in front. KWin restores it to the last geometry it chose for the window itself, with no
+     * tile: its old floating place, or a cascade place the script once gave it in some other
+     * group, which can look like another spot. So only a KWin tile in another spot (Meta+arrows
+     * while maximized) keeps it out; so does a restore on another activity or desktop.
      * A group that dissolved when the window left is formed again from the windows still in its
      * spot.
      * @param {{output: (string|number), position: string}|null} spot - the window's new spot
@@ -711,7 +713,9 @@ class TileableWindow extends BaseWindow {
         // Still maximized: wait for the restore.
         if (this.window.maximizeMode === 3 || (spot && spot.position === "maximize")) return false;
         this.cascade.restoreTo = null;
-        if (spot && (spot.output !== memo.output || spot.position !== memo.position)) return false;
+        const qtm = this.window.quickTileMode;
+        const kwinTiled = Boolean(this.tileRect()) || (typeof qtm === "number" && qtm !== 0);
+        if (kwinTiled && spot && (spot.output !== memo.output || spot.position !== memo.position)) return false;
         const index = coordinator.cascades;
         if (index.contextOf(this) !== memo.ctx || !this.isOnCurrentContext()) return false;
         const id = this.window.internalId;
@@ -861,7 +865,8 @@ class TileableWindow extends BaseWindow {
      * window's spot, or else a group on the same output whose slot's middle half holds the point
      * the pointer was let go at. A window is dragged by its title bar, far from its centre, so
      * the pointer is what the user aims; the window's centre is used only when KWin reports no
-     * pointer position. Only groups of the current activity and desktop are looked at.
+     * pointer position. Failing that, the pointer let go on a member's title bar joins its group.
+     * Only groups of the current activity and desktop are looked at.
      * @param {{x: number, y: number}|null} [pointer]
      * @returns {boolean} True if the window joined a group.
      */
@@ -882,6 +887,7 @@ class TileableWindow extends BaseWindow {
                     cy >= slot.y + slot.height / 4 && cy <= slot.y + (3 * slot.height) / 4;
             }) || null;
         }
+        if (!group && pointer) group = this.groupByTitleBarAt(ctx, pointer);
         if (!group) {
             debug("drop: no cascade group here", this.getCaption(), "spot", JSON.stringify(spot), "pointer", JSON.stringify(pointer), "geo", this.geometry.toString());
             return false;
@@ -889,6 +895,26 @@ class TileableWindow extends BaseWindow {
         debug("drop: joining cascade group", group.key);
         index.add(group, this);
         return true;
+    }
+
+    /**
+     * The group, on this window's output, one of whose members' title bars is under `pointer`:
+     * the top TITLE_BAR_HEIGHT px of the member, across its width. The rear members' title bars
+     * are the strips the cascade leaves showing.
+     * @param {string} ctx
+     * @param {{x: number, y: number}} pointer
+     * @returns {CascadeGroup|null}
+     */
+    groupByTitleBarAt(ctx, pointer) {
+        const output = this.getOutputName();
+        const onTitleBar = (tw) => {
+            if (tw === this || !tw.window) return false;
+            const g = tw.geometry;
+            return pointer.x >= g.left && pointer.x <= g.right && pointer.y >= g.top && pointer.y <= g.top + TileableWindow.TITLE_BAR_HEIGHT;
+        };
+        const group = coordinator.cascades.groupsIn(ctx).find((g) => g.output === output && g.windows().some(onTitleBar)) || null;
+        if (group) debug("drop: on a title bar in cascade group", group.key);
+        return group;
     }
 
     // --- Tile spot ---
@@ -1211,6 +1237,8 @@ TileableWindow._instances = new Map();
 TileableWindow.DROP_SETTLE_MS = 50;
 /** The cascade offset (px) between one window's title bar and the next. */
 TileableWindow.CASCADE_STEP = 32;
+/** How far (px) below a window's top a drop counts as on its title bar (or Firefox's tab bar). */
+TileableWindow.TITLE_BAR_HEIGHT = 40;
 /** Spot names by the work area sides a tile touches (Left, Right, Top, Bottom). */
 TileableWindow.TILE_SIDES_SPOT = {
     LTB: "left",

@@ -65,9 +65,32 @@ describe.each(K.APIS)("KWin $name API", (a) => {
         expect(group.ring.length).toBe(2);
     });
 
-    test("let go near the group's edge (outside its middle half), it does not join", () => {
+    test("let go near the group's edge (outside its middle half, below the title bars), it does not join", () => {
         const { b } = setup();
-        drag(b, { x: 40, y: 40, width: 600, height: 400 }, { x: 100, y: 55 });
+        drag(b, { x: 40, y: 140, width: 600, height: 400 }, { x: 100, y: 150 });
+
+        expect(tw(b).getCascadeGroup()).toBeNull();
+    });
+
+    test.each([
+        ["the rear member's title bar", { x: 500, y: 50 }],
+        ["the front member's title bar", { x: 600, y: 90 }],
+    ])("let go on %s, it joins the group", (_, pointer) => {
+        const { b, group } = setup();
+        // a1 is laid out at y 32 and a2 at y 64, so their title bars are y 32-72 and 64-104.
+        drag(b, { x: pointer.x - 300, y: pointer.y - 15, width: 600, height: 400 }, pointer);
+
+        expect(tw(b).getCascadeGroup()).toBe(group);
+        expect(group.activeId()).toBe("b");
+    });
+
+    test("let go on the title bar of a window in no group, it does not join anything", () => {
+        const { b } = setup();
+        const lone = K.makeWindow("lone", { x: 1000, y: 600, width: 800, height: 400 });
+        const listed = [...workspace.windowList(), lone];
+        workspace.windowList.mockImplementation(() => listed);
+        tw(lone).initialize();
+        drag(b, { x: 1100, y: 600, width: 600, height: 400 }, { x: 1300, y: 615 });
 
         expect(tw(b).getCascadeGroup()).toBeNull();
     });
