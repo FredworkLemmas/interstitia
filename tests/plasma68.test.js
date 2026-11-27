@@ -46,7 +46,7 @@ global.gap = { left: 32, right: 32, top: 32, bottom: 32, mid: 32 };
 global.panel = { left: false, right: false, top: false, bottom: false };
 global.config = { includeMaximized: true, excludeMode: true, includeMode: false, applications: [] };
 
-["contents/code/034_geometry.js", "contents/code/035_tileable_window.js"].forEach((file) => {
+["contents/code/034_geometry.js", "contents/code/035_tileable_window.js", "contents/code/036_cascade_index.js"].forEach((file) => {
     eval.call(global, fs.readFileSync(path.join(__dirname, "..", file), "utf8"));
 });
 
@@ -121,7 +121,7 @@ beforeEach(() => {
     jest.clearAllMocks();
     timers.length = 0;
     TileableWindow._instances.clear();
-    coordinator.cascadeGroups.clear();
+    coordinator.cascades.clear();
     coordinator.block = false;
     coordinator.mouseDragOrResizeInProgress = false;
     workspace.activeWindow = null;
@@ -200,7 +200,118 @@ describe.each(APIS)("KWin $name API", (a) => {
         });
     });
 
-    describe("drop behaviour: snap into a nearby quick-tile spot, otherwise change nothing (H3, H7)", () => {
+    describe("a tile split away from the 25/50/75% anchors (daneel, 2026-11-25)", () => {
+        // KWin keeps a quick-tile split where the user last dragged it. Here the left column is
+        // split at y = 600, 44 px from the half anchor (556), outside its 34 px reach.
+        const TOP = { x: 0, y: 0, width: 960, height: 600 };
+        const BOTTOM = { x: 0, y: 600, width: 960, height: 480 };
+
+        (a.old ? test.skip : test)("windows on either side of the split get the middle gap between them", () => {
+            const top = makeWindow("mr75", TOP, tiled(TOP));
+            const bottom = makeWindow("tmux", BOTTOM, tiled(BOTTOM));
+            workspace.windowList.mockReturnValue([top, bottom]);
+
+            TileableWindow.get(top).applyGaps();
+            TileableWindow.get(bottom).applyGaps();
+
+            // Outer edges from the anchors; the split edges at round(600 - 16) and that + 32.
+            expect(round(top.frameGeometry)).toEqual({ x: 32, y: 32, width: 912, height: 552 });
+            expect(round(bottom.frameGeometry)).toEqual({ x: 32, y: 616, width: 912, height: 432 });
+        });
+
+        (a.old ? test.skip : test)("re-applying gaps to an already gapped window changes nothing", () => {
+            const top = makeWindow("mr75", TOP, tiled(TOP));
+            workspace.windowList.mockReturnValue([top]);
+            TileableWindow.get(top).applyGaps();
+            const once = round(top.frameGeometry);
+
+            TileableWindow.get(top).applyGaps();
+
+            expect(round(top.frameGeometry)).toEqual(once);
+        });
+
+        (a.old ? test.skip : test)("a split 45 px off the half point gets the same answer from both sides (daneel, 17:26:41)", () => {
+            // Judged from the window edges, the left window's 915 snapped to the half anchor (944)
+            // while the right window's 915 did not (931): the windows overlapped.
+            const L = { x: 0, y: 0, width: 915, height: 1080 };
+            const R = { x: 915, y: 0, width: 1005, height: 1080 };
+            const l = makeWindow("l", L, tiled(L));
+            const r = makeWindow("r", R, tiled(R));
+            workspace.windowList.mockReturnValue([l, r]);
+
+            TileableWindow.get(l).applyGaps();
+            TileableWindow.get(r).applyGaps();
+
+            expect(round(l.frameGeometry)).toEqual({ x: 32, y: 32, width: 867, height: 1016 });
+            expect(round(r.frameGeometry)).toEqual({ x: 931, y: 32, width: 957, height: 1016 });
+        });
+
+        (a.old ? test.skip : test)("a window KWin left off its tile is put back on its tile, gapped", () => {
+            // KWin shifted a window on another activity past the screen edge when the split moved.
+            const w = makeWindow("w", { x: 87, y: 0, width: 1100, height: 1080 }, tiled(TOP));
+            workspace.windowList.mockReturnValue([w]);
+
+            TileableWindow.get(w).applyGaps();
+
+            expect(round(w.frameGeometry)).toEqual({ x: 32, y: 32, width: 912, height: 552 });
+        });
+
+        (a.old ? test : test.skip)("without a tile object only the anchors apply", () => {
+            const top = makeWindow("mr75", TOP, tiled(TOP));
+            workspace.windowList.mockReturnValue([top]);
+
+            TileableWindow.get(top).applyGaps();
+
+            expect(round(top.frameGeometry)).toEqual({ x: 32, y: 32, width: 912, height: 568 });
+        });
+    });
+
+    describe("resizing a tiled window re-gaps the neighbours KWin resized with it", () => {
+        test("the window below a resized top tile gets its gap back when the resize ends", () => {
+            const TOP = { x: 0, y: 0, width: 960, height: 540 };
+            const BOTTOM = { x: 0, y: 540, width: 960, height: 540 };
+            const top = makeWindow("mr75", TOP, tiled(TOP));
+            const bottom = makeWindow("tmux", BOTTOM, tiled(BOTTOM));
+            workspace.windowList.mockReturnValue([top, bottom]);
+            TileableWindow.get(top).initialize();
+            TileableWindow.get(bottom).initialize();
+
+            // Drag the top window's bottom edge; KWin moves the split and the bottom tile with it,
+            // ending back on the half split, both windows flush against it.
+            top.resize = true;
+            top.interactiveMoveResizeStarted.emit();
+            top.frameGeometry = rect(TOP);
+            top.frameGeometryChanged.emit();
+            bottom.frameGeometry = rect(BOTTOM);
+            bottom.frameGeometryChanged.emit();
+            expect(round(bottom.frameGeometry)).toEqual(BOTTOM);
+            top.resize = false;
+            top.interactiveMoveResizeFinished.emit();
+            flushTimers();
+
+            expect(round(top.frameGeometry)).toEqual({ x: 32, y: 32, width: 912, height: 492 });
+            expect(round(bottom.frameGeometry)).toEqual({ x: 32, y: 556, width: 912, height: 492 });
+        });
+
+        test("a window left alone during the drag is not touched afterwards", () => {
+            const w = makeWindow("kate", { x: 0, y: 0, width: 960, height: 1080 }, tiled({ x: 0, y: 0, width: 960, height: 1080 }));
+            const other = makeWindow("dolphin", { x: 960, y: 0, width: 960, height: 1080 }, tiled({ x: 960, y: 0, width: 960, height: 1080 }));
+            workspace.windowList.mockReturnValue([w, other]);
+            TileableWindow.get(w).initialize();
+            const spy = jest.spyOn(TileableWindow.get(other), "applyGaps");
+
+            w.resize = true;
+            w.interactiveMoveResizeStarted.emit();
+            w.frameGeometryChanged.emit();
+            w.resize = false;
+            w.interactiveMoveResizeFinished.emit();
+            flushTimers();
+
+            expect(spy).not.toHaveBeenCalled();
+        });
+    });
+
+    describe("drop behaviour: a floating window stays where it is dropped; KWin's own drag-to-edge tiles get gaps", () => {
         /** Replays a mouse drag as Phase 0 logged it: Started (move or resize), geometry changes, Finished. */
         const drag = (w, { to, move = true, tileAtEnd = null }) => {
             TileableWindow.get(w).initialize();
@@ -233,70 +344,23 @@ describe.each(APIS)("KWin $name API", (a) => {
             expect(slotCalls()).toEqual([]);
         });
 
-        test("a window dropped a few px off the gapped right half becomes a right quick tile", () => {
+        // Interstitia used to quick-tile a floating window dropped near a tile spot or against a
+        // screen edge. KWin's own edge and corner tiling does that; a drop is left alone.
+        test.each([
+            ["a few px off the gapped right half", { x: 990, y: 40, width: 890, height: 1000 }],
+            ["a few px off the ungapped bottom-left quarter", { x: 10, y: 550, width: 940, height: 520 }],
+            ["against the left screen edge", { x: 0, y: 300, width: 600, height: 400 }],
+            ["partly past the left edge in the top-left corner", { x: -40, y: 5, width: 500, height: 400 }],
+            ["across the whole width at the top edge", { x: 0, y: 0, width: 1920, height: 700 }],
+            ["in the middle of the screen", { x: 700, y: 400, width: 600, height: 400 }],
+        ])("a floating window dropped %s stays exactly where it was dropped", (_, to) => {
             const w = makeWindow("kate", { x: 300, y: 300, width: 600, height: 400 });
             workspace.windowList.mockReturnValue([w]);
 
-            drag(w, { to: { x: 990, y: 40, width: 890, height: 1000 } });
-
-            expect(workspace.activeWindow).toBe(w);
-            expect(slotCalls()).toEqual(["slotWindowQuickTileRight"]);
-        });
-
-        test("a window dropped a few px off the ungapped bottom-left quarter becomes that quarter", () => {
-            const w = makeWindow("kate", { x: 300, y: 300, width: 600, height: 400 });
-            workspace.windowList.mockReturnValue([w]);
-
-            drag(w, { to: { x: 10, y: 550, width: 940, height: 520 } });
-
-            expect(slotCalls()).toEqual(["slotWindowQuickTileBottomLeft"]);
-        });
-
-        test("a window dropped 30 px off every edge of a tile spot is too far to line up and touches no screen edge", () => {
-            const w = makeWindow("kate", { x: 300, y: 300, width: 600, height: 400 });
-            workspace.windowList.mockReturnValue([w]);
-
-            drag(w, { to: { x: 1006, y: 62, width: 852, height: 956 } });
+            drag(w, { to });
 
             expect(slotCalls()).toEqual([]);
-            expect(round(w.frameGeometry)).toEqual({ x: 1006, y: 62, width: 852, height: 956 });
-        });
-
-        test("a window dropped against the left screen edge fills the left tile spot it overlaps most", () => {
-            const w = makeWindow("kate", { x: 300, y: 300, width: 600, height: 400 });
-            workspace.windowList.mockReturnValue([w]);
-
-            drag(w, { to: { x: 0, y: 300, width: 600, height: 400 } });
-
-            expect(slotCalls()).toEqual(["slotWindowQuickTileLeft"]);
-        });
-
-        test("a window dropped partly past the left edge in the top-left corner fills the top-left quarter", () => {
-            const w = makeWindow("kate", { x: 300, y: 300, width: 600, height: 400 });
-            workspace.windowList.mockReturnValue([w]);
-
-            drag(w, { to: { x: -40, y: 5, width: 500, height: 400 } });
-
-            expect(slotCalls()).toEqual(["slotWindowQuickTileTopLeft"]);
-        });
-
-        test("a window dropped across the whole width at the top edge maximizes", () => {
-            const w = makeWindow("kate", { x: 300, y: 300, width: 600, height: 400 });
-            workspace.windowList.mockReturnValue([w]);
-
-            drag(w, { to: { x: 0, y: 0, width: 1920, height: 700 } });
-
-            expect(slotCalls()).toEqual(["slotWindowMaximize"]);
-        });
-
-        test("a floating window dropped in the middle of the screen is left exactly where it was dropped", () => {
-            const w = makeWindow("kate", { x: 300, y: 300, width: 600, height: 400 });
-            workspace.windowList.mockReturnValue([w]);
-
-            drag(w, { to: { x: 700, y: 400, width: 600, height: 400 } });
-
-            expect(slotCalls()).toEqual([]);
-            expect(round(w.frameGeometry)).toEqual({ x: 700, y: 400, width: 600, height: 400 });
+            expect(round(w.frameGeometry)).toEqual(to);
         });
 
         test("resizing a floating window against the screen edge never snaps it", () => {

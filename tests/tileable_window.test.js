@@ -28,6 +28,7 @@ global.config = { includeMaximized: false, excludeMode: true, includeMode: false
 const filesToLoad = [
     "contents/code/034_geometry.js",
     "contents/code/035_tileable_window.js",
+    "contents/code/036_cascade_index.js",
 ];
 
 filesToLoad.forEach((file) => {
@@ -240,13 +241,12 @@ describe("TileableWindow Class", () => {
         expect(global.debug).toHaveBeenCalledWith("move resized changed", tw.getCaption());
         expect(tw.applyGaps).toHaveBeenCalled();
         
-        // Test a custom action trigger (e.g., quickTileModeChanged)
+        // Tile changes gap the window too; the cascade check runs from setupSpotSignals()
         const tileModeTrigger = triggers.find(t => t[1] === "tile mode changed");
         const tileModeConn = tileModeTrigger[0].connect.mock.calls[0][0];
         tileModeConn();
         expect(global.debug).toHaveBeenCalledWith("tile mode changed", tw.getCaption());
-        expect(global.debug).toHaveBeenCalledWith("triggering cascade check for", tw.getCaption(), "due to tile change");
-        expect(tw.applyGaps).toHaveBeenCalledWith(true);
+        expect(tw.applyGaps).toHaveBeenCalledTimes(2);
     });
 
     /**

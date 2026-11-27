@@ -4,7 +4,7 @@ Interstitia is an extension for KDE's window manager that adds space around tile
 
 The size of the gap and the applications to be gapped are configurable.
 
-Interstitia works with KWin's own quick tiling (Meta+arrow keys, or dragging a window to a screen edge); it does not tile windows on its own. Floating windows keep exactly the size and position you give them, with one exception, described under *Dropping windows* below.
+Interstitia works with KWin's own quick tiling (Meta+arrow keys, or dragging a window to a screen edge); it does not tile windows on its own. Floating windows keep exactly the size and position you give them, wherever you drop them.
 
 ![screenshot](.img/screenshot.png)
 
@@ -47,24 +47,19 @@ cd interstitia
 ./install.sh
 ```
 
-### Dropping windows
-
-When you drag a floating window and drop it, Interstitia checks whether it is close to a quick-tile spot: the left or right half, one of the four quarters, or the whole screen.
-
-*   **Lined up with a spot:** if every edge of the window is within 24 pixels of a spot, the window is quick-tiled into it, with gaps, just as if you had pressed Meta+arrow.
-*   **Against a screen edge:** if the window touches a screen edge (within 24 pixels, or past it), it is quick-tiled into whichever spot along that edge it overlaps most. Against the left edge, that is the left half or one of the left quarters.
-*   **Anywhere else:** nothing changes. Interstitia never resizes a floating window, or the windows around it.
-
-Resizing a window never snaps it.
-
 ### Cascading Windows
 
-Interstitia includes a feature to "cascade" windows that occupy the same tiling slot (same size and position). This is useful when you have multiple windows stacked on top of each other and want to see them all at once without moving them.
+Interstitia can "cascade" windows that share a tile spot (a half, a quarter, the top or bottom half, or maximized), offsetting each by 32 pixels so you can see every title bar in the stack. The cascade fills the windows' actual tile, so it follows KWin's split wherever you have dragged it, and moves with it when you drag it again.
 
-*   **Start Cascade (`Ctrl+}`):** Resizes and offsets windows in the current slot by 32 pixels, allowing you to see the title bars and edges of all windows in the stack. Keep pressing the key combo to cycle thru the windows in the cascade group.
-*   **Stop Cascade (`Ctrl+{`):** Resets all windows in the slot to their original tiled position and size.
+*   **Start Cascade (`Ctrl+}`):** Cascades the windows in the active window's spot. Pressing it again brings the top-left window to the front, so repeated presses walk round the whole group.
+*   **Stop Cascade (`Ctrl+{`):** Puts every window in the group back on the full spot, with the active window on top.
 
-The cascade state is automatically cleared if you manually move or resize a window, ensuring the script doesn't interfere with your manual window management.
+A cascade group keeps its windows in a fixed order. The active window is always the one furthest down and to the right. Focusing another window in the group (clicking it, or Alt+Tab) rotates the group after a short pause: the windows that were below and to the right of it move round to the top-left, in order, and it takes the bottom-right place. If you press on a window's title bar and drag it, it leaves the group without moving first, and stays in front of the windows left behind.
+
+*   **Joining:** drop a window onto a group, or move it into the group's spot with `Meta`+arrow keys (for a group of maximized windows, maximize it). It joins at the bottom-right.
+*   **Leaving:** drag a window out (resizing a window in a group keeps it there; the group follows the resized tile), move it to another spot with `Meta`+arrow keys, maximize it (or, in a group of maximized windows, restore it), or close it.
+
+Cascade groups belong to one activity and one virtual desktop. Groups in the same spot on different activities or desktops never affect each other, and a window that is on several activities can be in a different group on each. Switching activity or desktop lays out that activity's and desktop's groups.
 
 ## Configuration
 

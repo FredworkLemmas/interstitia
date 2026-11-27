@@ -1,3 +1,16 @@
+[ 1.2.0 ]
+- Fixed cascade groups leaking across activities: dropping a window into a spot that had a group on another activity joined it, moved that activity's windows and could switch to it
+- Cascade groups now belong to one activity and one virtual desktop; a window on several activities can be in a different group on each, and switching lays out the groups of what is showing
+- Stable cascade groups: windows keep a fixed order and the active window is always bottom-right; focusing a window in a group rotates the group to it, after a short pause so that dragging a window out never moves it first
+- Ctrl+} still brings the top-left window to the front, walking round the whole group
+- Moving a window into a group's spot with Meta+arrow keys joins the group; moving a member to another spot leaves it
+- Cascade groups follow KWin's tile split: a group fills its windows' actual tile, wherever the split is, and is laid out again when the split is dragged; resizing a window in a group no longer takes it out
+- Fixed the gap between tiled windows going missing when KWin's tile split was away from the half or quarter points, or after resizing a neighbouring tiled window
+- The top and bottom halves can hold cascade groups, and maximized windows can be cascaded too; maximizing a window joins a group of maximized windows, and restoring one leaves it
+- Removed snapping a dropped floating window into a nearby tile spot: a floating window stays where you drop it, and KWin's own edge and corner tiling places windows; dropping a window on a cascade group still joins it
+- Focus, Ctrl+} and activity switches only move the windows of the groups involved; the gap pass on a switch only visits windows on the current activity and desktop
+- Cascade groups are indexed by activity, desktop, screen and tile spot (new file 036_cascade_index.js); nothing is stored on KWin window objects any more
+
 [ 1.1.3 ]
 - Supports Plasma 6.8 (and still 6.5 to 6.7)
 - Fixed gaps no longer being applied under Plasma 6.8 (KWin 6.8 rectangles no longer expose left/right/top/bottom)

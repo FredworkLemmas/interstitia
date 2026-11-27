@@ -10,6 +10,8 @@ function onRelayouted() {
         signal.connect((...args) => {
             if (condition(...args)) {
                 debug(message);
+                // Lay out the cascade groups of whatever now shows, then gap the rest.
+                if (coordinator.cascades) coordinator.cascades.layoutContext();
                 coordinator.applyGapsAll();
             }
         });
