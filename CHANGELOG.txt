@@ -8,6 +8,7 @@
 - Fixed the gap between tiled windows going missing when KWin's tile split was away from the half or quarter points, or after resizing a neighbouring tiled window
 - The top and bottom halves can hold cascade groups, and maximized windows can be cascaded too; maximizing a window joins a group of maximized windows, and restoring one leaves it
 - A window maximized out of a cascade group (say by double-clicking its title bar) now comes to the front instead of ending up behind the group's other windows, and restoring it puts it back in the group, in front
+- A window maximized out of a tile spot (a half or quarter) now goes back into that tile when it is restored, in front of the windows it overlaps, instead of to where it floated before it was tiled
 - Dropping a window on a cascade group now goes by where you let go of the pointer, not the window's centre, so a tall window dragged by its title bar joins the group you drop it on; letting go on the title bar of a window in a group joins that group too
 - Removed snapping a dropped floating window into a nearby tile spot: a floating window stays where you drop it, and KWin's own edge and corner tiling places windows; dropping a window on a cascade group still joins it
 - Focus, Ctrl+} and activity switches only move the windows of the groups involved; the gap pass on a switch only visits windows on the current activity and desktop
