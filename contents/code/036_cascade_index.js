@@ -258,7 +258,7 @@ class CascadeGroup {
         const windows = this.ordered();
         if (!slot || windows.length === 0) return;
         const n = windows.length;
-        debug("CascadeGroup.layout:", n, "windows in", this.key, JSON.stringify(windows.map((tw) => tw.getCaption())));
+        debug("CascadeGroup.layout:", n, "windows in", this.key);
         this._laidSlot = slot;
         this._nudged = false;
         this._place(windows, (k) => CascadeGroup.geometryAt(slot, k, n));
@@ -499,7 +499,6 @@ class CascadeIndex {
      * @param {KWin.Window} window
      */
     onWindowActivated(window) {
-        if (window && TileableWindow._instances.get(window.internalId)) TileableWindow._instances.get(window.internalId).diag("windowActivated" + (coordinator.cascadeLayout ? " (cascadeLayout)" : ""));
         if (coordinator.cascadeLayout) return;
         this._cancelFocus();
         if (!window) return;
