@@ -511,6 +511,7 @@ class TileableWindow extends BaseWindow {
             // maximize spot is made of maximized windows.
             if (group.position !== "maximize" && (this.window.maximizeMode === 3 || this.isMaximized())) {
                 debug("applyGaps: cascade member maximized, leaving", group.key);
+                this.diag("applyGaps: maximized, before leaving");
                 coordinator.cascades.remove(group, this);
                 leftByMaximize = true;
             } else {
@@ -686,6 +687,7 @@ class TileableWindow extends BaseWindow {
      * Raise this window and make it active, without the focus rotation reacting to it.
      */
     bringToFront() {
+        this.diag("bringToFront: before");
         const wasLaying = coordinator.cascadeLayout;
         coordinator.cascadeLayout = true;
         try {
@@ -694,6 +696,52 @@ class TileableWindow extends BaseWindow {
         } finally {
             coordinator.cascadeLayout = wasLaying;
         }
+        this.diag("bringToFront: after");
+        this.diagLater("bringToFront: +300ms", 300);
+        this.diagLater("bringToFront: +1000ms", 1000);
+    }
+
+    /**
+     * DIAGNOSTIC (temporary): log this window's state and the top of KWin's stacking order.
+     * @param {string} label
+     */
+    diag(label) {
+        if (typeof debugMode === "undefined" || !debugMode || !this.window) return;
+        try {
+            const cap = (w) => (w ? String(w.caption).slice(0, 30) : "none");
+            const stack = Array.isArray(workspace.stackingOrder) ? workspace.stackingOrder : null;
+            const top = stack ? stack.slice(-5).reverse().map(cap).join(" > ") : "(no stackingOrder)";
+            const group = this.getCascadeGroup();
+            const tile = this.window.tile && this.window.tile.absoluteGeometry ? new WindowGeometry(this.window.tile.absoluteGeometry).toString() : "none";
+            debug(
+                "DIAG", label, "|", cap(this.window),
+                "| maxMode", this.window.maximizeMode,
+                "| geo", new WindowGeometry(this.window.frameGeometry).toString(),
+                "| tile", tile,
+                "| qtm", this.window.quickTileMode,
+                "| spot", JSON.stringify(this.cascade.spot),
+                "| group", group ? group.key + " " + JSON.stringify(group.members) : "none",
+                "| active", cap(workspace.activeWindow),
+                "| raiseWindow", typeof workspace.raiseWindow,
+                "| top", top,
+            );
+        } catch (e) {
+            debug("DIAG failed", label, e);
+        }
+    }
+
+    /**
+     * DIAGNOSTIC (temporary): diag() after `ms`.
+     * @param {string} label
+     * @param {number} ms
+     */
+    diagLater(label, ms) {
+        if (typeof debugMode === "undefined" || !debugMode) return;
+        const timer = new QTimer();
+        timer.interval = ms;
+        timer.singleShot = true;
+        timer.timeout.connect(() => this.diag(label));
+        timer.start();
     }
 
     /**
@@ -1004,7 +1052,9 @@ class TileableWindow extends BaseWindow {
         if (!this.window || coordinator.mouseDragOrResizeInProgress) return;
         const index = coordinator.cascades;
         const group = this.getCascadeGroup();
+        this.diag("onSpotSettled: before refresh");
         const spot = this.refreshSpot();
+        this.diag("onSpotSettled: after refresh");
         const inSpot = (g) => spot && spot.output === g.output && spot.position === g.position;
         if (group && inSpot(group)) return;
         // The group raises its own windows as it lays out again; the active window that left it
@@ -1049,6 +1099,7 @@ class TileableWindow extends BaseWindow {
             if (signal === undefined) return;
             signal.connect(() => {
                 debug(message, this.getCaption());
+                if (message === "maximized changed" || message === "tile changed" || message === "tile mode changed") this.diag("signal: " + message);
                 if (customAction) {
                     customAction();
                 } else {
