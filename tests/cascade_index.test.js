@@ -375,6 +375,35 @@ describe.each(K.APIS)("KWin $name API", (a) => {
             expect(index().groupOf(tw(ws[0])).members).toEqual(["A", "C"]);
         });
 
+        test.each([
+            ["the group goes on, gaps on maximized windows", ["A", "B", "C"], true],
+            ["the group goes on, no gaps on maximized windows", ["A", "B", "C"], false],
+            ["the group dissolves", ["A", "B"], true],
+        ])("a maximized member ends up in front of the group and active (%s)", (_, ids, includeMaximized) => {
+            const ws = windowsIn(ids);
+            workspace.windowList.mockImplementation(() => ws);
+            ws.forEach((w) => tw(w).initialize());
+            press(ws[ws.length - 1]);
+            const saved = config.includeMaximized;
+            config.includeMaximized = includeMaximized;
+            workspace.raiseWindow = jest.fn();
+            try {
+                // A title bar double-click on the top-left (rear) member: it is active, then maximized.
+                workspace.activeWindow = ws[0];
+                ws[0].maximizeMode = 3;
+                ws[0].frameGeometry = K.AREA;
+                ws[0].maximizedChanged.emit();
+
+                expect(index().groupOf(tw(ws[0]))).toBeNull();
+                const raised = workspace.raiseWindow.mock.calls.map((c) => c[0].internalId);
+                expect(raised[raised.length - 1]).toBe("A");
+                expect(workspace.activeWindow).toBe(ws[0]);
+            } finally {
+                delete workspace.raiseWindow;
+                config.includeMaximized = saved;
+            }
+        });
+
         test("a member moved to another spot (Meta+arrows) leaves the group once the tile settles", () => {
             const ws = windowsIn(["A", "B", "C"]);
             workspace.windowList.mockImplementation(() => ws);

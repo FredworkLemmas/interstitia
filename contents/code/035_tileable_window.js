@@ -526,8 +526,9 @@ class TileableWindow extends BaseWindow {
         }
 
         if (this.shouldIgnore()) {
-            // Raise the maximized window above the members its group just laid out.
-            if (leftByMaximize) workspace.activeWindow = this.window;
+            // The group raised its remaining windows as it laid out again; the maximized
+            // window goes back in front of them. Activating it alone does not raise it.
+            if (leftByMaximize) this.bringToFront();
             return;
         }
 
@@ -563,7 +564,7 @@ class TileableWindow extends BaseWindow {
             coordinator.block = false;
         }
 
-        if (leftByMaximize) workspace.activeWindow = this.window;
+        if (leftByMaximize) this.bringToFront();
         debug("");
     }
 
