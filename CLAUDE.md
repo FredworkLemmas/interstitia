@@ -47,8 +47,9 @@ The `contents/code/` directory contains numbered source modules that `invoke dev
 | `010_init.js` | Global flags, Plasma 6 detection (`isPlasma6`) |
 | `020_logging.js` | `debug()` / `fulldebug()` utilities |
 | `030_config.js` | Config loading from KDE settings with multi-API fallback |
-| `034_geometry.js` | `WindowGeometry` value object (x, y, width, height, and derived edges) and static geometry helpers, including `pickSnapTarget` |
-| `035_tileable_window.js` | Core logic: `WindowCoordinator`, `BaseWindow`, `TileableWindow`, `CascadeGroup`, `ActiveWindow` |
+| `034_geometry.js` | `WindowGeometry` value object (x, y, width, height, and derived edges) and static geometry helpers |
+| `035_tileable_window.js` | Core logic: `WindowCoordinator`, `BaseWindow`, `TileableWindow`, `ActiveWindow` |
+| `036_cascade_index.js` | Cascade groups: `CascadeGroup` and `CascadeIndex` (sets `coordinator.cascades`) |
 | `070_reaction.js` | Workspace signal wiring (`onRelayouted`) |
 | `080_main_loop.js` | Entry point: config load, shortcut registration, window init |
 
@@ -58,12 +59,23 @@ The `contents/code/` directory contains numbered source modules that `invoke dev
 
 **`TileableWindow`** — wraps a `KWin.Window` object. Use the factory `TileableWindow.get(window)` (never `new`) to get a singleton per window. Key methods:
 - `applyGaps()` — entry point for the gap algorithm; runs only for windows in a KWin tile or maximized (`isTiledOrMaximized()`), and calls `applyGapsArea()` (snap edges to the gapped grid anchors)
-- `afterDrop()` / `snapToTile()` — 50 ms after a drag ends: tiled or maximized windows get gaps; a moved floating window is quick-tiled into a nearby spot (`getSnapCandidates()`, `WindowGeometry.pickSnapTarget`) or left alone
+- `afterDrop()` — 50 ms after a drag ends: a moved window dropped on a cascade group joins it (`joinGroupAfterDrop()`); otherwise tiled or maximized windows get gaps and a floating window is left where it was dropped (KWin's own edge and corner tiling places it)
 - `getGridAnchors()` — calculates quarter/half/full snap points for the tiling grid, accounting for gap offsets
 - `shouldIgnore()` — checks window against app blacklist/whitelist
 - `initialize()` / `setupGeometrySignals()` — connects KWin signals for this window
 
-**`ActiveWindow`** (extends `TileableWindow`) — handles the cascade feature: finding windows occupying the same slot and offsetting them to reveal stacked title bars.
+**`ActiveWindow`** (extends `TileableWindow`) — the Ctrl+} / Ctrl+{ shortcuts: `startCascade()` / `stopCascade()`. It shares its window's `cascade` data with the cached `TileableWindow`.
+
+### Cascade groups (in `036_cascade_index.js`)
+
+- Each `TileableWindow` keeps `this.cascade = { spot, groups }`: `spot` is `{ output, position }` (output name; position `left`, `right`, `top`, `bottom`, `topLeft`, `topRight`, `bottomLeft`, `bottomRight`, `maximize`) or null when floating, from `computeSpot()`. A KWin 6.8 tile that matches no standard spot (an off-centre split, a custom-layout column) is named by the work area edges it touches (`tileSpotName()`, `TILE_SIDES_SPOT`); `groups` maps a context key to the window's group there.
+- A context is the current activity and virtual desktop (`TileableWindow.currentContextKey()`, `activity|desktopId`). Groups never reach across contexts; a window on several activities or desktops can be in a different group on each.
+- **`CascadeIndex`** (`coordinator.cascades`): `contexts` is `Map<ctx, Map<"output|position", CascadeGroup>>`. Lookups (`groupOf`, `groupAt`, `groupsIn`) never scan other windows. Only `create`/`add`/`remove`/`dissolve`/`removeWindow` write the index or the windows' back-references.
+- **`CascadeGroup`**: `ctx`, `output`, `position`, a `ring` of window ids in a fixed order and `active` (an index into it). `members` is the layout order, top-left to bottom-right: `ring[active+1]` ... round to `ring[active]`, which is always bottom-right and in front. `activate(id)` moves the pointer (A B C D E, activate B → C D E A B); `cycle()` (Ctrl+}) activates the top-left window; `insert()` puts a joining window just after the active one and makes it active; `drop()` makes the window above-left active when the active one leaves. Its slot geometry (`slotGeometry()`) is a member's KWin tile, gapped like a lone window in it (`tileSlotGeometry()`), so it follows the split; with no tile reported it keeps the last tile slot while the work area is unchanged, else the spot's standard rectangle. When KWin moves a member (a dragged split), `onMemberMoved()` re-lays the group out if the slot moved, or once if the member is off its place; windows in different tiles with the same spot name never share a group (`fitsGroup()`); only groups of the showing context are laid out, writing only geometry that changes, with `coordinator.cascadeLayout` set (`workspace.raiseWindow` when KWin has it, else activation).
+- **Focus rotation:** `workspace.windowActivated` → `CascadeIndex.onWindowActivated()`, which rotates the group after `CascadeIndex.FOCUS_SETTLE_MS` (400 ms) unless a move started or another window was focused. A press activates a window up to ~315 ms before KWin reports its drag, and a click cannot be told from Alt+Tab, so every activation waits.
+- **Context switch:** `070_reaction.js` calls `coordinator.cascades.layoutContext()` before `applyGapsAll()`, which lays out the current context's groups and puts windows that are grouped elsewhere, but not here, back on their full spot. `applyGapsAll()` visits only windows on the current activity and desktop.
+- **Joining and leaving:** a drop (spot lookup, or the middle half of a group's slot), Ctrl+} on a window in a group's spot, or a settled tile change into a group's spot (Meta+arrows) joins; a move start (a resize keeps the window in its group; the group re-lays out in the resized tile when it ends) (the dragged window is raised and refocused after the group re-lays out, `bringToFront()`), a maximize (out of a half or quarter group), a restore from maximized (out of a `maximize` group, decided in `settleMoved()`), or a settled tile change to another spot leaves; a window that leaves this way while active is raised back in front of the group it left (`bringToFront()`), and gapped in its new spot. Maximizing a window joins a `maximize` group; maximized windows can cascade even with `includeMaximized` off (`shouldIgnore(true)`). KWin moving a member is handled `DROP_SETTLE_MS` later (`onMemberMoved()` → `settleMoved()`), so several moves share one layout.
+- No cascade data is stored on KWin window objects.
 
 ### Gap Algorithm
 
@@ -73,14 +85,15 @@ The `contents/code/` directory contains numbered source modules that `invoke dev
 4. If any window edge is near an anchor (within tolerance), snap it to the "open" version
 5. The gap between windows tiled side by side comes from the half/quarter anchors, which include `gapMid`; neighbouring windows are never resized
 6. A window in a KWin 6.8 tile (`window.tile.absoluteGeometry`) is gapped from its tile, not its own edges (`gapTileRect()`): screen edges get the outer gaps, a split within `gapMid + 2` of a quarter/half point gets that anchor, any other split `gapMid / 2` each side. Each split is judged from the tile alone, so the tiles either side always agree
-7. Only tiled and maximized windows are gapped; floating windows are only ever changed by the drop snap
+7. Only tiled and maximized windows are gapped; floating windows are never moved or resized
 
 ### Signal / State Management
 
 - `WindowCoordinator.block` — prevents re-entrant geometry changes
 - `WindowCoordinator.mouseDragOrResizeInProgress` — skips gap recalculation during active user drags; gaps are applied only on `moveResizedChanged` (drag complete)
 - `WindowCoordinator.skippedDuringDrag` — windows skipped during a drag (KWin resizes a tile's neighbours with it); re-gapped by `regapSkippedDuringDrag()` once the drop settles
-- Cascade state is stored on `window.interstitia_cascade_data` directly on the KWin window object
+- `WindowCoordinator.cascadeLayout` — true while a cascade group moves and raises its own windows
+- A window's spot is refreshed `DROP_SETTLE_MS` after tile, output and maximize changes (`setupSpotSignals()`); a member whose spot changed leaves its group
 
 ### Plasma API Compatibility
 

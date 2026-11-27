@@ -28,10 +28,8 @@ if (typeof registerShortcut === "undefined") {
     }
 }
 
-// event wiring ???
-workspace.windowActivated.connect((client) => {
-    if (!client) return;
-});
+// Focusing a background window of a cascade group rotates the group to it.
+workspace.windowActivated.connect((client) => coordinator.cascades.onWindowActivated(client));
 
 // init interstitia environment
 debug("initializing interstitia");
@@ -39,16 +37,13 @@ const initialWindows = workspace.windowList ? workspace.windowList() : workspace
 initialWindows.forEach((client) => TileableWindow.get(client).initialize());
 workspace.windowAdded.connect((client) => TileableWindow.get(client).initialize());
 
-// Remove closed windows from any cascade group they belonged to.
+// Take closed windows out of every cascade group they were in, and forget them.
 workspace.windowRemoved.connect((client) => {
-    const key = client.interstitia_cascadeSlotKey;
-    if (key) {
-        const tw = TileableWindow.get(client);
-        if (tw) {
-            debug("windowRemoved: removing closed window from cascade group", key, tw.getCaption());
-            TileableWindow.removeFromCascadeGroup(tw, key);
-        }
-    }
+    const tw = TileableWindow._instances.get(client.internalId);
+    if (!tw) return;
+    debug("windowRemoved:", tw.getCaption());
+    coordinator.cascades.removeWindow(tw);
+    TileableWindow._instances.delete(client.internalId);
 });
 
 // refresh tiling state

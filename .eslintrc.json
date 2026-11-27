@@ -13,10 +13,19 @@
     "ecmaVersion": "latest",
     "sourceType": "script"
   },
-  "plugins": ["jest"],
+  "plugins": [
+    "jest"
+  ],
   "rules": {
     "no-redeclare": "off",
-    "no-unused-vars": ["error", { "vars": "local", "args": "after-used", "ignoreRestSiblings": false }]
+    "no-unused-vars": [
+      "error",
+      {
+        "vars": "local",
+        "args": "after-used",
+        "ignoreRestSiblings": false
+      }
+    ]
   },
   "globals": {
     "workspace": "readonly",
@@ -75,6 +84,7 @@
     "BaseWindow": "readonly",
     "TileableWindow": "readonly",
     "ActiveWindow": "readonly",
-    "CascadeGroup": "readonly"
+    "CascadeGroup": "readonly",
+    "CascadeIndex": "readonly"
   }
 }
