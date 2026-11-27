@@ -825,6 +825,9 @@ class TileableWindow extends BaseWindow {
             coordinator.mouseDragOrResizeInProgress = false;
             const wasMove = this._dragIsMove;
             this._dragIsMove = false;
+            // Where the pointer let go: what the user aimed the drop at.
+            const c = workspace.cursorPos;
+            const pointer = c && typeof c.x === "number" && typeof c.y === "number" ? { x: c.x, y: c.y } : null;
 
             // KWin 6.8 can update a window's tile just after Finished (drag-to-edge tiling),
             // so decide what to do once it has settled.
@@ -832,7 +835,7 @@ class TileableWindow extends BaseWindow {
             timer.interval = TileableWindow.DROP_SETTLE_MS;
             timer.singleShot = true;
             timer.timeout.connect(() => {
-                this.afterDrop(wasMove);
+                this.afterDrop(wasMove, pointer);
                 // KWin resizes a tiled window's neighbours along with it; gap them too.
                 coordinator.regapSkippedDuringDrag(this);
             });
@@ -845,20 +848,24 @@ class TileableWindow extends BaseWindow {
      * joins it; otherwise a tiled or maximized window gets its gaps, and a floating window
      * stays exactly where it was dropped (KWin's own edge and corner tiling does the rest).
      * @param {boolean} wasMove - Whether the interaction was a move rather than a resize.
+     * @param {{x: number, y: number}|null} [pointer] - Where the pointer was let go.
      */
-    afterDrop(wasMove) {
+    afterDrop(wasMove, pointer = null) {
         if (!this.window || this.shouldIgnore()) return;
-        if (wasMove && this.joinGroupAfterDrop()) return;
+        if (wasMove && this.joinGroupAfterDrop(pointer)) return;
         if (this.isTiledOrMaximized()) this.applyGaps();
     }
 
     /**
      * After a move, join the cascade group the window was dropped on, if any: the group in the
-     * window's spot, or else a group on the same output whose slot's middle half holds the
-     * window's centre. Only groups of the current activity and desktop are looked at.
+     * window's spot, or else a group on the same output whose slot's middle half holds the point
+     * the pointer was let go at. A window is dragged by its title bar, far from its centre, so
+     * the pointer is what the user aims; the window's centre is used only when KWin reports no
+     * pointer position. Only groups of the current activity and desktop are looked at.
+     * @param {{x: number, y: number}|null} [pointer]
      * @returns {boolean} True if the window joined a group.
      */
-    joinGroupAfterDrop() {
+    joinGroupAfterDrop(pointer = null) {
         const index = coordinator.cascades;
         const ctx = index.contextOf(this);
         const spot = this.refreshSpot();
@@ -866,7 +873,7 @@ class TileableWindow extends BaseWindow {
         if (group && !this.fitsGroup(group)) group = null;
         if (!group) {
             const g = this.geometry;
-            const cx = g.x + g.width / 2, cy = g.y + g.height / 2;
+            const cx = pointer ? pointer.x : g.x + g.width / 2, cy = pointer ? pointer.y : g.y + g.height / 2;
             const output = this.getOutputName();
             group = index.groupsIn(ctx).find((candidate) => {
                 if (candidate.output !== output) return false;
@@ -875,7 +882,10 @@ class TileableWindow extends BaseWindow {
                     cy >= slot.y + slot.height / 4 && cy <= slot.y + (3 * slot.height) / 4;
             }) || null;
         }
-        if (!group) return false;
+        if (!group) {
+            debug("drop: no cascade group here", this.getCaption(), "spot", JSON.stringify(spot), "pointer", JSON.stringify(pointer), "geo", this.geometry.toString());
+            return false;
+        }
         debug("drop: joining cascade group", group.key);
         index.add(group, this);
         return true;
